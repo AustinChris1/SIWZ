@@ -1,0 +1,45 @@
+{
+  "name": "@siwz/next-auth",
+  "version": "0.1.0",
+  "description": "Sign in with Zcash — NextAuth.js v4 / Auth.js v5 credentials provider",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./nonce": {
+      "types": "./dist/nonce.d.ts",
+      "import": "./dist/nonce.js",
+      "require": "./dist/nonce.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@siwz/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "next-auth": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next-auth": { "optional": false }
+  },
+  "devDependencies": {
+    "next-auth": "^4.24.7",
+    "typescript": "^5.5.4",
+    "tsup": "^8.2.4"
+  },
+  "keywords": ["zcash", "siwz", "next-auth", "auth.js", "authentication"],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@siwz/core",
+  "version": "0.1.0",
+  "description": "Sign in with Zcash — core protocol: message format, address parsing, signature verification",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.6.0",
+    "@noble/hashes": "^1.5.0",
+    "@scure/base": "^1.1.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "tsup": "^8.2.4",
+    "vitest": "^2.0.5"
+  },
+  "keywords": ["zcash", "siwz", "sign-in", "authentication"],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

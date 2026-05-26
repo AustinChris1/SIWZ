@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.next/
+out/
+build/
+coverage/
+.turbo/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.tsbuildinfo
+.vscode/
+.idea/
+
+# Demo app SQLite
+apps/demo/data/*.sqlite
+apps/demo/data/*.db
+
+# Service address private key files — NEVER COMMIT.
+.service-address.local.txt
+**/.service-address.local.txt
