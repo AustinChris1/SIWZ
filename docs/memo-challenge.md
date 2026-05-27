@@ -57,6 +57,38 @@ To bind a *specific* identity to the session, the app supplies the identity (e.g
 
 ## Operational considerations
 
+### Identity model — anonymous by default, UFVK-bound on opt-in
+
+Memo-challenge cryptographically proves **someone with spend authority over some ZEC sent a payment with this nonce in the memo**. It does *not* tell the verifier *who* the sender is — that's the whole point of shielded sends. So SIWZ has to make a UX choice: what identity gets bound to the resulting session?
+
+ZBooks's `MemoSignIn` exposes two modes via the `/api/auth/memo/issue` request body:
+
+- **Default — anonymous, device-persistent.** No special input. The server generates an opaque `anon:<random-hex>` identity and the client stores it in `localStorage` under `siwz.zbooks.previous_anon_id`. On subsequent sign-ins from the same browser, the client sends `{ previousAnonId }`; the server validates the shape (`/^anon:[0-9a-f]{8,128}$/`) and reuses it as the identity. Result: same browser → same anon account. Different browser / wiped localStorage → fresh anon account.
+
+- **Opt-in — UFVK-bound, cross-device.** A "Returning user?" expander lets the user paste their UFVK. The client sends `{ ufvk }`; the server validates with `inspectUfvk()` and uses it as the identity. Same UFVK signing in from any device → same ZBooks account. **The UFVK is used for the one sign-in only and is NEVER persisted client-side.** The user is expected to keep their UFVK in a password manager and paste it when they want cross-device recognition. NextAuth's session cookie keeps them signed in afterwards until session expiry, so it's paste-once-per-month at worst.
+
+**Why UFVKs are not persisted in localStorage even though it would be convenient:** a UFVK is read-only (can't spend) but reveals the wallet's *complete* transaction history — every amount, every memo, every counterparty, for as long as the wallet exists. localStorage is readable by any JavaScript on the same origin (XSS), most browser extensions, anyone with brief physical device access, and sometimes browser sync. Storing a UFVK there would trade single-page-load convenience for permanent leakage of the user's entire financial history. The opaque `anon:<hex>` id has none of that risk — it's just a session handle the server itself generated and reissues; it leaks nothing.
+
+**Why UFVK at all and not just a username?** UFVK is the Zcash-native "this is my account" identifier — already meaningful to apps like ZBooks that need to read tx history, stable across wallet reinstalls (as long as the seed is preserved), unforgeable (you can't claim a UFVK you don't actually hold because the user is expected to paste their real one). A user-chosen username would be claim-based ("alice" first-come-first-served) and adds a separate identity system with no Zcash backing.
+
+**Why not just rely on NextAuth's session cookie for "remember me"?** We do — that's the primary mechanism. The anon-id `localStorage` only matters for the edge case where the user signs out, sessions expire, or cookies are cleared, and they want to come back as the same anon account on the same device rather than yet another fresh one. UFVK-bound users don't need the anon-id storage; their UFVK is the persistent identifier when they choose to paste it.
+
+**Server-side validation:** the issue endpoint validates both `ufvk` (via `inspectUfvk`, must look like `uview...` / `uviewtest...` bech32m) and `previousAnonId` (must match `anon:` + 8–128 hex chars). A malicious client cannot supply an arbitrary string and have it become their identity — it must pass the appropriate shape check first.
+
+### Public lightwalletd infrastructure
+
+Per ZecHub developer guidance and standard light-wallet practice, using a **public lightwalletd** is the normal hackathon / small-app path. SIWZ does **not** require you to run your own full Zcash node — that would be a 60–300 GB sync and serious infra. Instead, the `zingo-cli`-based deployment recipe in [`docs/winning-deployment.md`](./winning-deployment.md) points at one of these:
+
+| Endpoint | Notes |
+|---|---|
+| `https://mainnet.lightwalletd.com:9067` | ECC's canonical; default in our setup script |
+| `https://zec.rocks:443` | Community-run mirror, well-maintained |
+| `https://eu.zec.rocks:443` / `https://na.zec.rocks:443` | Geo mirrors for latency |
+
+The operator of any public lightwalletd you sync against learns *which addresses you scan* (metadata leak) but **cannot decrypt your memos** (no IVK). For production deployments with stronger privacy needs, self-host the lightwalletd → Zebra pair; for hackathon use, public is fine and is what most light wallets in the ecosystem do.
+
+For browser-side WebZjs use cases, ChainSafe also operates a gRPC-Web proxy at `https://zcash-mainnet.chainsafe.dev` — that endpoint is not used by our server-side architecture, but is documented in `winning-deployment.md` as the right thing to point at for any future browser-only SIWZ integration.
+
 ### Service address: transparent vs shielded vs UA
 
 **Transparent (`t1…`) — default.**
@@ -65,10 +97,30 @@ To bind a *specific* identity to the session, the app supplies the identity (e.g
 - **You must control the spending key.** Funds sent for sign-ins are yours; lose the key, lose the funds. Use `scripts/gen-service-address.mjs` to generate one safely.
 - Never use an address whose private key is in your source repo (or anywhere else public). The server in `apps/demo` has a hard-coded refusal-list for known-leaked test addresses.
 
-**Shielded (`zs…`, `u1…`).**
+**Shielded (`zs…`, `u1…`) — implemented.**
 - Privacy-maximalist option: the service address never appears on-chain in a publicly-decryptable form. Memo + amount are encrypted to the receiver.
-- Requires running lightwalletd and holding the Incoming Viewing Key server-side to decrypt incoming memos.
-- The verifier hook in `apps/demo/src/lib/explorer.ts` is pluggable — drop in a `LightwalletdExplorer` that uses the IVK and you can support shielded service addresses without changes to the protocol code.
+- ZBooks's `ZcashRpcExplorer` (in `apps/demo/src/lib/explorer.ts`) speaks the standard Zcash wallet RPC (`z_listreceivedbyaddress`) over either HTTP or `zcash-cli` to fetch decrypted memos. The challenge is encoded in the memo as `SIWZ:<nonce>`; the amount stays at a fixed dust value (0.00001 ZEC) since it no longer needs to carry the nonce.
+- Setup:
+  1. Generate or pick a shielded address inside your Zcash daemon's wallet:
+     ```bash
+     zcash-cli z_getnewaddress sapling      # or 'unified'
+     # → zs1…  (or u1…)
+     ```
+  2. Paste that address into `apps/demo/.env.local`:
+     ```env
+     SIWZ_SERVICE_ADDRESS=zs1...   # or u1…
+     ```
+  3. Tell ZBooks how to reach your daemon:
+     ```env
+     # HTTP (production-shaped)
+     ZCASH_RPC_URL=http://127.0.0.1:8232
+     ZCASH_RPC_USER=zcashrpcuser
+     ZCASH_RPC_PASS=zcashrpcpassword
+     # OR shell-out (same-machine local dev)
+     ZCASH_CLI_PATH=/usr/local/bin/zcash-cli
+     ```
+  4. Restart `pnpm dev:zbooks`. The issue endpoint will now auto-detect the shielded address and dispatch the memo-mode challenge.
+- The verifier needs the IVK for the service address. Easiest: keep the address in the same daemon that runs the verifier. Privilege-separated: generate the address elsewhere, export with `z_exportviewingkey`, then `z_importviewingkey` into the verifier daemon (read-only).
 
 **Unified addresses (`u1…`) as service address?** ZIP 321 lets you target a UA, but most wallets will send to the *shielded receiver* (sapling/orchard) inside the UA, not the transparent one. That payment is invisible to a transparent-output-scanning verifier. If you put a UA as `SIWZ_SERVICE_ADDRESS`, expect sign-ins to silently fail unless you've also wired up shielded verification. For hackathon scope: stick with `t1…`.
 

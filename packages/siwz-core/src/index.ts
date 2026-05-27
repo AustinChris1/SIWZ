@@ -52,9 +52,11 @@ export type { ZIP321Request } from "./zip321.js";
 export {
   issueMemoChallenge,
   verifyMemoChallenge,
+  inferMemoChallengeMode,
 } from "./memo-challenge.js";
 export type {
   MemoChallenge,
+  MemoChallengeMode,
   IssueMemoChallengeOpts,
   VerifyMemoChallengeOpts,
   VerifyMemoChallengeResult,

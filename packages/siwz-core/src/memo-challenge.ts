@@ -1,6 +1,30 @@
+import { parseAddress } from "./address.js";
 import { buildZip321, zecToZatoshi } from "./zip321.js";
 import { SiwzError } from "./errors.js";
 import type { Network } from "./types.js";
+
+/**
+ * Memo string format used in shielded-memo mode. The body after the
+ * prefix is the per-challenge nonce (12 random alphanumeric chars from
+ * the challenge token). Wallet UIs show this verbatim to the user.
+ */
+const MEMO_PREFIX = "SIWZ:";
+
+function formatMemo(nonce: string): string {
+  return `${MEMO_PREFIX}${nonce}`;
+}
+
+function extractNonce(memo: string): string | null {
+  if (!memo.startsWith(MEMO_PREFIX)) return null;
+  return memo.slice(MEMO_PREFIX.length);
+}
+
+export type MemoChallengeMode = "transparent-amount" | "shielded-memo";
+
+function inferMode(serviceAddress: string): MemoChallengeMode {
+  const parsed = parseAddress(serviceAddress);
+  return parsed.type === "p2pkh" || parsed.type === "p2sh" ? "transparent-amount" : "shielded-memo";
+}
 
 /**
  * SIWZ memo-challenge — the Zcash-native sign-in flow.
@@ -47,10 +71,23 @@ import type { Network } from "./types.js";
 export interface IssueMemoChallengeOpts {
   /** Server's HMAC secret (typically NEXTAUTH_SECRET). */
   secret: string;
-  /** Service address that receives the proof tx. Should be transparent. */
+  /**
+   * Service address that receives the proof tx. May be transparent
+   * (`t1…`), sapling (`zs…`), or unified (`u1…`). The challenge dispatcher
+   * picks the verification mode automatically based on the address type:
+   *   - Transparent → unique-amount challenge (verifier sees the amount
+   *     publicly on chain).
+   *   - Shielded (Sapling / Unified) → memo-encoded challenge (verifier
+   *     decrypts incoming memos with its IVK and matches the nonce).
+   */
   serviceAddress: string;
   /** Network. */
   network: Network;
+  /**
+   * Force a specific mode regardless of address type. Useful for tests.
+   * Defaults to auto-detection from the address.
+   */
+  mode?: MemoChallengeMode;
   /**
    * Base amount in ZEC. The unique nonce (4 decimal digits, 0..9999) is
    * added on top in zatoshi. Default 0.0001 ZEC so amounts land in the
@@ -78,12 +115,23 @@ export interface IssueMemoChallengeOpts {
 }
 
 export interface MemoChallenge {
+  /** Which verification mode this challenge is in. */
+  mode: MemoChallengeMode;
   /** ZIP 321 URI to render as QR or `zcash:` deep link. */
   uri: string;
-  /** Exact amount in ZEC the user must send. */
+  /**
+   * Amount in ZEC the user must send. For transparent-amount mode this
+   * is the unique per-challenge amount; for shielded-memo mode it's
+   * a fixed dust amount (the memo carries the nonce instead).
+   */
   amountZec: string;
-  /** Same amount in zatoshi (for on-chain comparison). */
+  /** Same amount in zatoshi. */
   amountZatoshi: string;
+  /**
+   * Memo the user must include in their tx (shielded-memo mode only).
+   * The wallet will pre-fill this from the ZIP 321 URI's memo param.
+   */
+  memo?: string;
   /** Service address the tx must be sent to. */
   serviceAddress: string;
   /** Stateless token to round-trip back to verifyMemoChallenge. */
@@ -96,8 +144,17 @@ export interface VerifyMemoChallengeOpts {
   secret: string;
   /** Token issued by issueMemoChallenge. */
   token: string;
-  /** Amount in zatoshi observed on-chain (the unique part the verifier saw). */
-  observedAmountZatoshi: bigint | string;
+  /**
+   * Amount in zatoshi observed on-chain. Used for transparent-amount
+   * mode verification; may be omitted for shielded-memo mode where
+   * the memo carries the nonce.
+   */
+  observedAmountZatoshi?: bigint | string;
+  /**
+   * Memo decrypted from the shielded note. Required for shielded-memo
+   * mode. May be omitted for transparent-amount mode.
+   */
+  observedMemo?: string;
   /** Address the on-chain tx paid to. Must match the service address in the token. */
   observedRecipient: string;
   now?: Date;
@@ -106,16 +163,33 @@ export interface VerifyMemoChallengeOpts {
 export interface VerifyMemoChallengeResult {
   ok: boolean;
   identity?: string;
-  error?: "MALFORMED_TOKEN" | "BAD_SIGNATURE" | "EXPIRED" | "AMOUNT_MISMATCH" | "RECIPIENT_MISMATCH";
+  mode?: MemoChallengeMode;
+  error?:
+    | "MALFORMED_TOKEN"
+    | "BAD_SIGNATURE"
+    | "EXPIRED"
+    | "AMOUNT_MISMATCH"
+    | "MEMO_MISMATCH"
+    | "MISSING_OBSERVATION"
+    | "RECIPIENT_MISMATCH";
   errorMessage?: string;
 }
 
 interface ChallengePayload {
   v: 1;
-  /** Service address (transparent). */
+  /** Which mode this challenge expects ("ta" = transparent-amount, "sm" = shielded-memo). */
+  m: "ta" | "sm";
+  /** Service address. */
   to: string;
-  /** Amount expected, in zatoshi (string for JSON safety). */
+  /**
+   * Transparent-amount mode: expected amount in zatoshi (string).
+   * Shielded-memo mode: still set to the fixed dust amount so the verifier
+   * can sanity-check the observed note's value if it wants to (we don't
+   * enforce by default — the memo is the binding artifact).
+   */
   z: string;
+  /** Shielded-memo mode: the expected memo body (after "SIWZ:" prefix). */
+  n?: string;
   /** Identity to bind. */
   id: string;
   /** ms-since-epoch expiry. */
@@ -141,47 +215,103 @@ export async function issueMemoChallenge(opts: IssueMemoChallengeOpts): Promise<
   if (!opts.secret || opts.secret.length < 16) {
     throw new SiwzError("INVALID_MESSAGE", "issueMemoChallenge: secret must be ≥ 16 characters");
   }
-  // Address validation is performed by buildZip321 on render.
-
-  const base = zecToZatoshi(opts.baseAmountZec ?? "0.0001");
-  // 10,000 possible nonces — fits in 4 decimal digits so amounts look
-  // tidy on the wallet screen (e.g. 0.00018347 ZEC).
-  const nonceZatoshi = BigInt(secureRandomU32() % 10_000);
-  const totalZatoshi = base + nonceZatoshi;
-  const amountZec = formatZatoshi(totalZatoshi);
+  const mode: MemoChallengeMode = opts.mode ?? inferMode(opts.serviceAddress);
 
   const ttl = (opts.ttlSeconds ?? 600) * 1000;
   const expiresAtMs = Date.now() + ttl;
-
   const identity = opts.identity ?? `anon:${secureRandomU32().toString(16).padStart(8, "0")}${secureRandomU32().toString(16).padStart(8, "0")}`;
+
+  if (mode === "transparent-amount") {
+    const base = zecToZatoshi(opts.baseAmountZec ?? "0.0001");
+    const nonceZatoshi = BigInt(secureRandomU32() % 10_000);
+    const totalZatoshi = base + nonceZatoshi;
+    const amountZec = formatZatoshi(totalZatoshi);
+
+    const payload: ChallengePayload = {
+      v: 1,
+      m: "ta",
+      to: opts.serviceAddress,
+      z: totalZatoshi.toString(),
+      id: identity,
+      exp: expiresAtMs,
+    };
+    const token = await signPayload(opts.secret, payload);
+
+    const uri = buildZip321({
+      address: opts.serviceAddress,
+      amount: amountZec,
+      label: opts.label ?? "SIWZ sign-in",
+      message: opts.message ?? "Send to authenticate. The amount is unique to this sign-in attempt.",
+    });
+
+    return {
+      mode,
+      uri,
+      amountZec,
+      amountZatoshi: totalZatoshi.toString(),
+      serviceAddress: opts.serviceAddress,
+      token,
+      expiresAt: new Date(expiresAtMs).toISOString(),
+    };
+  }
+
+  // shielded-memo mode
+  const dust = zecToZatoshi(opts.baseAmountZec ?? "0.00001");
+  // 12 random alphanumeric chars — ~70 bits entropy, plenty of uniqueness,
+  // tiny memo footprint.
+  const nonce = randomAlphanumeric(12);
+  const memo = formatMemo(nonce);
 
   const payload: ChallengePayload = {
     v: 1,
+    m: "sm",
     to: opts.serviceAddress,
-    z: totalZatoshi.toString(),
+    z: dust.toString(),
+    n: nonce,
     id: identity,
     exp: expiresAtMs,
   };
-  const payloadJson = JSON.stringify(payload);
-  const payloadB64 = base64urlEncodeStr(payloadJson);
-  const sig = await hmacB64(opts.secret, payloadB64);
-  const token = `${payloadB64}.${sig}`;
+  const token = await signPayload(opts.secret, payload);
 
   const uri = buildZip321({
     address: opts.serviceAddress,
-    amount: amountZec,
+    amount: formatZatoshi(dust),
+    memo,
     label: opts.label ?? "SIWZ sign-in",
-    message: opts.message ?? "Send to authenticate. The amount is unique to this sign-in attempt.",
+    message: opts.message ?? "Send to authenticate. The memo proves this sign-in is yours.",
   });
 
   return {
+    mode,
     uri,
-    amountZec,
-    amountZatoshi: totalZatoshi.toString(),
+    amountZec: formatZatoshi(dust),
+    amountZatoshi: dust.toString(),
+    memo,
     serviceAddress: opts.serviceAddress,
     token,
     expiresAt: new Date(expiresAtMs).toISOString(),
   };
+}
+
+async function signPayload(secret: string, payload: ChallengePayload): Promise<string> {
+  const payloadB64 = base64urlEncodeStr(JSON.stringify(payload));
+  const sig = await hmacB64(secret, payloadB64);
+  return `${payloadB64}.${sig}`;
+}
+
+const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+function randomAlphanumeric(len: number): string {
+  const buf = new Uint8Array(len);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(buf);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { randomFillSync } = require("node:crypto");
+    randomFillSync(buf);
+  }
+  let out = "";
+  for (let i = 0; i < len; i++) out += ALPHA[buf[i]! % ALPHA.length];
+  return out;
 }
 
 export async function verifyMemoChallenge(opts: VerifyMemoChallengeOpts): Promise<VerifyMemoChallengeResult> {
@@ -209,21 +339,49 @@ export async function verifyMemoChallenge(opts: VerifyMemoChallengeOpts): Promis
       `expected tx to ${payload.to} but observed payment to ${opts.observedRecipient}`,
     );
   }
-  const observed = typeof opts.observedAmountZatoshi === "string"
-    ? BigInt(opts.observedAmountZatoshi)
-    : opts.observedAmountZatoshi;
-  if (payload.z !== observed.toString()) {
-    return failure(
-      "AMOUNT_MISMATCH",
-      `expected amount ${payload.z} zatoshi but observed ${observed.toString()}`,
-    );
+
+  const mode: MemoChallengeMode = payload.m === "sm" ? "shielded-memo" : "transparent-amount";
+
+  if (mode === "transparent-amount") {
+    if (opts.observedAmountZatoshi == null) {
+      return failure("MISSING_OBSERVATION", "transparent-amount mode requires observedAmountZatoshi");
+    }
+    const observed = typeof opts.observedAmountZatoshi === "string"
+      ? BigInt(opts.observedAmountZatoshi)
+      : opts.observedAmountZatoshi;
+    if (payload.z !== observed.toString()) {
+      return failure(
+        "AMOUNT_MISMATCH",
+        `expected amount ${payload.z} zatoshi but observed ${observed.toString()}`,
+      );
+    }
+    return { ok: true, identity: payload.id, mode };
   }
 
-  return { ok: true, identity: payload.id };
+  // shielded-memo mode
+  if (!opts.observedMemo) {
+    return failure("MISSING_OBSERVATION", "shielded-memo mode requires observedMemo");
+  }
+  const observedNonce = extractNonce(opts.observedMemo);
+  if (!observedNonce) {
+    return failure("MEMO_MISMATCH", `observed memo does not start with "${MEMO_PREFIX}"`);
+  }
+  if (observedNonce !== payload.n) {
+    return failure(
+      "MEMO_MISMATCH",
+      `expected nonce "${payload.n}" but observed "${observedNonce}"`,
+    );
+  }
+  return { ok: true, identity: payload.id, mode };
 }
 
 function failure(error: NonNullable<VerifyMemoChallengeResult["error"]>, message: string): VerifyMemoChallengeResult {
   return { ok: false, error, errorMessage: message };
+}
+
+/** Returns the address-type-appropriate mode for a given service address. */
+export function inferMemoChallengeMode(serviceAddress: string): MemoChallengeMode {
+  return inferMode(serviceAddress);
 }
 
 // ----- helpers -----

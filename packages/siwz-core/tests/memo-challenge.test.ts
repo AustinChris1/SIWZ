@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll } from "vitest";
-import { issueMemoChallenge, verifyMemoChallenge, parseZip321, zecToZatoshi } from "../src/index.js";
+import { issueMemoChallenge, verifyMemoChallenge, parseZip321, zecToZatoshi, inferMemoChallengeMode } from "../src/index.js";
 import { deriveMainnetP2pkh, FIXED_PRIV } from "./helpers.js";
 
 let serviceAddress: string;
@@ -7,6 +7,110 @@ const SECRET = "test-secret-must-be-at-least-16-chars";
 
 beforeAll(() => {
   serviceAddress = deriveMainnetP2pkh(FIXED_PRIV).address;
+});
+
+describe("inferMemoChallengeMode", () => {
+  it("transparent t-addr → transparent-amount", () => {
+    expect(inferMemoChallengeMode(serviceAddress)).toBe("transparent-amount");
+  });
+  // Sapling / Unified detection is exercised via the e2e fixture; the
+  // core's parseAddress accepts those HRPs without needing a real key.
+});
+
+describe("issueMemoChallenge shielded-memo mode", () => {
+  // Use forced mode rather than a real z-addr (we have no real one in tests).
+  it("emits a memo + dust amount + ZIP 321 URI with memo embedded", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET,
+      serviceAddress, // transparent, but mode override forces shielded
+      network: "mainnet",
+      mode: "shielded-memo",
+      identity: "user-claimed-id",
+    });
+    expect(ch.mode).toBe("shielded-memo");
+    expect(ch.memo).toMatch(/^SIWZ:[A-Za-z0-9]{12}$/);
+    expect(ch.amountZec).toBe("0.00001");
+    const parsedUri = parseZip321(ch.uri);
+    expect(parsedUri.memo).toBe(ch.memo);
+    expect(parsedUri.amount).toBe("0.00001");
+  });
+
+  it("round-trip verify succeeds with matching memo", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET, serviceAddress, network: "mainnet",
+      mode: "shielded-memo", identity: "alice",
+    });
+    const res = await verifyMemoChallenge({
+      secret: SECRET,
+      token: ch.token,
+      observedRecipient: serviceAddress,
+      observedMemo: ch.memo!,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.identity).toBe("alice");
+    expect(res.mode).toBe("shielded-memo");
+  });
+
+  it("rejects memo with wrong nonce", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET, serviceAddress, network: "mainnet",
+      mode: "shielded-memo", identity: "alice",
+    });
+    const res = await verifyMemoChallenge({
+      secret: SECRET,
+      token: ch.token,
+      observedRecipient: serviceAddress,
+      observedMemo: "SIWZ:totallyDifferentNonce123",
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("MEMO_MISMATCH");
+  });
+
+  it("rejects memo without SIWZ: prefix", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET, serviceAddress, network: "mainnet",
+      mode: "shielded-memo", identity: "alice",
+    });
+    const res = await verifyMemoChallenge({
+      secret: SECRET,
+      token: ch.token,
+      observedRecipient: serviceAddress,
+      observedMemo: "hello from alice",
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("MEMO_MISMATCH");
+  });
+
+  it("rejects when observedMemo missing", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET, serviceAddress, network: "mainnet",
+      mode: "shielded-memo", identity: "alice",
+    });
+    const res = await verifyMemoChallenge({
+      secret: SECRET,
+      token: ch.token,
+      observedRecipient: serviceAddress,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("MISSING_OBSERVATION");
+  });
+
+  it("rejects when observedAmount provided for shielded-memo (mode binding)", async () => {
+    const ch = await issueMemoChallenge({
+      secret: SECRET, serviceAddress, network: "mainnet",
+      mode: "shielded-memo", identity: "alice",
+    });
+    // Mode is recorded in the token; passing only an amount should fail
+    // with MISSING_OBSERVATION rather than silently succeeding.
+    const res = await verifyMemoChallenge({
+      secret: SECRET,
+      token: ch.token,
+      observedRecipient: serviceAddress,
+      observedAmountZatoshi: ch.amountZatoshi,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("MISSING_OBSERVATION");
+  });
 });
 
 describe("issueMemoChallenge / verifyMemoChallenge", () => {

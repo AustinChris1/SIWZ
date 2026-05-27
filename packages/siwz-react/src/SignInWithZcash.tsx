@@ -16,6 +16,13 @@ export interface SignInWithZcashProps extends UseSiwzOptions {
   enableSnap?: boolean;
   /** Override the Snap ID. Default: `npm:@chainsafe/webzjs-zcash-snap`. */
   snapId?: string;
+  /**
+   * Called when the user clicks "Use a different wallet" under the Snap
+   * primary button. When provided, the click goes to the parent (e.g.
+   * to switch to a sibling tab) instead of revealing the paste flow in
+   * place. When omitted, the legacy in-place behaviour is preserved.
+   */
+  onUseDifferentWallet?: () => void;
   /** Override classNames for fine-grained styling. */
   classNames?: Partial<{
     root: string;
@@ -48,6 +55,7 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
     onSuccess,
     enableSnap = false,
     snapId,
+    onUseDifferentWallet,
     classNames = {},
     ...siwzOptions
   } = props;
@@ -124,7 +132,10 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
           <button
             className="siwz-link-btn"
             type="button"
-            onClick={() => setShowPasteFlow(true)}
+            onClick={() => {
+              if (onUseDifferentWallet) onUseDifferentWallet();
+              else setShowPasteFlow(true);
+            }}
           >
             Use a different wallet (Zodl, Zingo, YWallet, zcashd) instead →
           </button>

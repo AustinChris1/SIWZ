@@ -1,78 +1,156 @@
 # Wallet integration
 
-How users actually sign a SIWZ challenge in each major Zcash wallet today.
+How users sign in to a SIWZ-enabled app from each major Zcash wallet. Two flows to know about:
 
-## Why is this paste-based?
+- **Memo-challenge** (primary, recommended): the app shows a QR code. User scans it with their wallet; the wallet opens pre-filled; user confirms; ~75s later the app detects the payment and signs them in. No copy/paste, no signmessage feature needed.
+- **Paste-signature flow** (fallback, power users): for the handful of wallets that expose `signmessage`. App shows a challenge string; user signs it in their wallet; user pastes the base64 signature back into the app.
 
-SIWZ uses the standard Zcash `signmessage` wire format (magic prefix `"Zcash Signed Message:\n"`), so any wallet that already exposes "Sign Message" works. What does NOT exist yet — for any Zcash wallet — is a browser-to-wallet URI scheme like `zcash:sign?challenge=…` that would let a website pop the user's wallet open automatically (the way WalletConnect does for Ethereum). Until wallets ship that, paste is the universal lowest common denominator. The flow is:
+This page covers both per wallet.
 
-1. App displays the SIWZ challenge.
-2. User opens their wallet, finds **Sign Message**, pastes the address + challenge.
-3. Wallet returns a base64 signature.
-4. User pastes that back into the app.
+---
 
-When a wallet ships a SIWZ-aware URI handler, `@siwz/react` will auto-detect it and skip steps 2-4.
+## Universal: memo-challenge via ZIP 321 (works with every shielded wallet)
 
-## Transparent (`t1…`) addresses
+The app generates a `zcash:<address>?amount=…&memo=…` URI and shows it as a QR code. Every modern Zcash wallet treats `zcash:` URIs as payment requests and pre-fills the send screen.
+
+### Zashi (mobile, iOS + Android)
+
+1. Tap the **Receive/Send** tab (bottom).
+2. Tap the QR-scanner icon.
+3. Point at the SIWZ QR code on the app's screen.
+4. Wallet opens with recipient + amount + memo pre-filled.
+5. Review and tap **Send**.
+
+That's it. Block confirmation takes ~75 seconds; the app polls and signs you in automatically.
+
+### YWallet (mobile + desktop, iOS / Android / Linux / macOS / Windows)
+
+1. Tap the ⋮ menu (top right on mobile, top bar on desktop).
+2. Choose **Pay URI** (or **Scan QR**).
+3. Scan the SIWZ QR code.
+4. Wallet shows the prefilled tx; tap **Send**.
+
+YWallet has the best Unified Address support of the bunch — if the SIWZ service address is a UA, YWallet will pick the best receiver automatically.
+
+### Zingo! (mobile + desktop)
+
+1. Tap **Send** tab.
+2. Tap the QR-scanner icon (camera icon in the recipient field).
+3. Scan the SIWZ QR.
+4. Review and tap **Send Now**.
+
+### Zodl (mobile)
+
+1. Tap the QR-scanner icon on the home screen.
+2. Scan the SIWZ QR.
+3. Confirm the prefilled tx.
+
+### Zashi-CLI / zcash-cli
+
+Two options:
+
+```bash
+# Use the URI directly if your build has a uri-sender command:
+zcash-cli pay "zcash:<address>?amount=0.00010163&memo=U0lXWjphYmMxMjM"
+
+# Or just paste the bits manually:
+zcash-cli z_sendmany "<from_zaddr>" '[{"address":"<service_addr>","amount":0.00010163,"memo":"53495757-3A-abc123…"}]'
+# (memo is hex-encoded for z_sendmany)
+```
+
+### eZcash / Zenith / Cake / Brave (Snap) / Trust / Exodus
+
+All speak ZIP 321 — scan the QR, the wallet prefills, you confirm. The exact menu path differs but every one of these has a "Scan QR" affordance on or near the Send screen.
+
+---
+
+## Power user: paste-signature flow (signmessage)
+
+This flow is for the small set of wallets that expose message signing. You only need this if your app prefers the SIWZ-classic flow for some reason (faster than waiting for block confirmation, or you want cryptographic ownership proof rather than payment-as-proof).
+
+> **Important:** all current implementations only support signing with **transparent** addresses. There is no widely-deployed message-signing standard for shielded addresses yet. ZIP 304 is the proposed Sapling standard but adoption is uneven.
 
 ### `zcashd` / `zcash-cli`
 
 ```bash
-zcash-cli signmessage "t1Mzhr3kuvJZptZsHWErxXEpVAyrgyngFmK" "<paste full SIWZ message>"
+zcash-cli signmessage "t1Mzhr…" "$(cat /tmp/siwz-challenge.txt)"
+# → IAOlKfGYjt...= (paste this into the app)
 ```
 
-Returns a base64 signature. Paste that into the SIWZ component's signature field.
+**Important gotcha:** shell quoting on multi-line strings is hostile. The safest pattern is to write the challenge text to a file first (no leading whitespace, no trailing newline added by `echo`), then `cat` it into the command:
 
-### Zodl
+```bash
+printf '%s' "<paste exact message here>" > /tmp/siwz-challenge.txt
+zcash-cli signmessage "<your t1 address>" "$(cat /tmp/siwz-challenge.txt)"
+```
 
-Look for **Sign Message** in the wallet menu (the exact path moves between versions — recent builds expose it under wallet settings or an advanced tools section). Paste the address and SIWZ challenge; copy out the resulting signature.
+Any byte-level difference between what you sign and what the server verifies = `ADDRESS_MISMATCH`. See [`security.md`](./security.md) for the diagnostic tool that recovers the address from a signature.
+
+### YWallet
+
+1. Account menu → **Sign Message**.
+2. Select the transparent receiver.
+3. Paste the challenge.
+4. Copy the produced signature back into the app.
 
 ### Zingo (desktop)
 
-Tools → Sign / Verify Message → enter the address, paste the challenge, copy the produced signature.
+Tools → **Sign / Verify Message** → enter the address → paste the challenge → copy the signature.
 
-### YWallet (desktop / mobile)
+### Zodl, eZcash, Zenith, etc.
 
-Account menu → Sign Message → select the transparent receiver, paste the challenge.
+These wallets vary in whether they expose signmessage at all. If you don't see a "Sign Message" option in your wallet's menus, use the memo-challenge flow instead — it works regardless.
 
-### ZecWallet Lite
+---
 
-Address book → context menu on the transparent address → Sign Message.
+## MetaMask + ChainSafe Zcash Snap
 
-## Shielded (`zs…`, Sapling) addresses
+The [Zcash Snap](https://snaps.metamask.io/snap/npm/chainsafe/webzjs-zcash-snap/) is a separate auth model: instead of signing a message OR sending a tx, you grant the dApp permission to read your viewing key.
 
-[ZIP 304](https://zips.z.cash/zip-0304) defines the Sapling sign-message scheme. As of mid-2026, support is uneven across wallets:
+1. Click "Sign in with MetaMask" in the app.
+2. MetaMask prompts to install/connect the Zcash Snap.
+3. Approve. The dApp now has your UFVK + a stable account ID.
+4. Done — no QR scanning, no payment.
 
-| Wallet | ZIP 304 support |
-|---|---|
-| `zcashd` / `zcash-cli` (`z_signmessage`) | Reference implementation |
-| YWallet | Yes (via menu) |
-| Others | Use the memo-challenge fallback below |
+**Current limitation:** the ChainSafe Snap restricts RPC calls to its own dashboard (`https://webzjs.chainsafe.dev`). Other dApps get rejected by the Snap's manifest allowlist. Either run a forked Snap with your origin allowlisted, or fall back to the memo-challenge flow until the upstream restriction relaxes.
 
-### Memo-challenge fallback (works in every shielded wallet)
+---
 
-For wallets that don't implement ZIP 304, ownership can be proven by sending a tiny shielded transaction with the SIWZ nonce in the memo to a service address you control:
+## Wallet feature matrix
 
-1. App displays a service address and a unique memo (e.g. `siwz:<nonce>:<claimed-address>`).
-2. User sends 0.00000001 ZEC (or 0) with that memo from the address they're claiming.
-3. App's verifier service uses an incoming viewing key to decrypt the memo, confirms the nonce matches, and treats the claim as authenticated.
+What's actually possible with each wallet today, ordered by SIWZ-readiness:
 
-This proves the user *had spend authority* over the claimed address. It does not prove the address is theirs in the cryptographic sense ZIP 304 does — it could be a wallet they once had access to — but for most application threat models it's plenty.
+| Wallet | Memo-challenge (ZIP 321) | Signmessage | Snap | UA receiver |
+|---|---|---|---|---|
+| Zashi | ✅ | ❌ | ❌ | ✅ |
+| YWallet | ✅ | ✅ | ❌ | ✅ |
+| Zingo | ✅ | ⚠️ build-dependent | ❌ | ✅ |
+| Zodl | ✅ | ❌ | ❌ | ✅ |
+| eZcash | ✅ | ❌ | ❌ | ✅ |
+| Zenith | ✅ | ❌ | ❌ | ✅ |
+| Cake | ✅ | ❌ | ❌ | ✅ |
+| Dizzy | ✅ | ❌ | ❌ | ✅ |
+| Unstoppable | ✅ | ❌ | ❌ | ✅ |
+| `zcash-cli` | ✅ | ✅ | ❌ | ✅ |
+| Zingo-CLI | ✅ | ⚠️ | ❌ | ✅ |
+| Zallet | ✅ | ⚠️ | ❌ | ✅ |
+| Zcashd | ✅ | ✅ | ❌ | ✅ |
+| MetaMask + Zcash Snap | ❌ (Snap doesn't expose send-via-uri) | ❌ | ✅ (with allowlist caveat) | ✅ |
+| Brave (Zcash Snap) | ❌ | ❌ | ✅ | ✅ |
+| SSP / Trust / Exodus / Coinomi / SafePal | ⚠️ transparent-only | ⚠️ varies | ❌ | ❌ |
+| Ledger / Keystone (hardware) | ✅ via companion app | ❌ | ❌ | ❌ |
 
-The memo path is not built into `@siwz/core` because it requires a lightwalletd connection and an incoming viewing key. We may add a `@siwz/memo-challenge` package in a future release.
+**Conclusion:** **memo-challenge works with literally every wallet.** That's not a coincidence — it's by design. SIWZ-classic and Snap are nice-to-haves for the wallets that support them; memo-challenge is the universal floor.
 
-## Unified (`u1…`) addresses
+---
 
-Unified addresses contain one or more receivers (P2PKH, Sapling, Orchard). Today, there is no canonical "sign as this UA" operation — instead, the user signs with one of the receivers inside their UA, and the application displays the UA as the visible identity.
+## I'm a wallet developer — how do I add native SIWZ support?
 
-Most wallets that hold a UA will let the user pick a receiver to sign with. SIWZ accepts a UA in the address field and the wallet's `signmessage` UI will return a signature against whichever receiver it picks.
-
-## I'm a wallet developer — how do I add SIWZ support?
-
-You don't need to. As long as your wallet already supports `signmessage` against a transparent address (using the standard Zcash magic prefix `"Zcash Signed Message:\n"`), your users can sign SIWZ challenges today.
+You don't need to. As long as your wallet speaks ZIP 321 (which it almost certainly already does), your users can use SIWZ today.
 
 If you want a smoother UX:
 
-- Detect when the user pastes a SIWZ-formatted message (look for the header line `<domain> wants you to sign in with your Zcash account:` and let them sign in one click.
-- Display the `domain`, `URI`, and `statement` prominently in your signing UI so users know what they're authorizing.
-- For shielded receivers, implement ZIP 304 — it's the standards-track path.
+1. **Implement a "return to dApp" deep link** after a successful tx. Right now the user has to manually switch back to the browser. If your wallet honored `?callback=https://app.example.com/done`, the flow would be one continuous interaction.
+2. **Add memo round-trip support** — when a `zcash:` URI includes a memo, display it prominently on the confirm screen so the user can verify they're authenticating to the right app.
+3. **Surface the recipient address's HRP type** (transparent vs unified) so users know whether they're sending shielded or transparent. SIWZ memo-challenge prefers shielded sends.
+4. **For desktop wallets**: register as the OS handler for `zcash:` URIs. Currently most don't, so users have to copy-paste the URI manually.
