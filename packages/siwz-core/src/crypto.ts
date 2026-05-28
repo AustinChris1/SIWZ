@@ -9,12 +9,12 @@ export function hash160(data: Uint8Array): Uint8Array {
   return ripemd160(sha256(data));
 }
 
-/** Double SHA256. Used as the Base58Check checksum and inside magicHash. */
+/** Double SHA256. */
 export function dsha256(data: Uint8Array): Uint8Array {
   return sha256(sha256(data));
 }
 
-/** Encode a byte array as Base58Check (version-prefixed, double-SHA256-checksummed). */
+/** Encode bytes as Base58Check (4-byte double-SHA256 checksum appended). */
 export function base58checkEncode(payload: Uint8Array): string {
   const checksum = dsha256(payload).slice(0, 4);
   const out = new Uint8Array(payload.length + 4);
@@ -23,10 +23,7 @@ export function base58checkEncode(payload: Uint8Array): string {
   return base58.encode(out);
 }
 
-/**
- * Decode a Base58Check string. Returns the payload (without checksum) or
- * throws if the checksum is invalid.
- */
+/** Decode a Base58Check string. Returns the payload, or throws on bad checksum. */
 export function base58checkDecode(s: string): Uint8Array {
   const decoded = base58.decode(s);
   if (decoded.length < 4) throw new Error("base58check: too short");
@@ -39,10 +36,7 @@ export function base58checkDecode(s: string): Uint8Array {
   return payload;
 }
 
-/**
- * Encode a Bitcoin-style "compact size" varint. We never need more than
- * 1–3 bytes for SIWZ messages (they're sub-kB) but implement correctly.
- */
+/** Encode a Bitcoin-style compact-size varint. */
 export function encodeVarInt(n: number | bigint): Uint8Array {
   const v = typeof n === "bigint" ? n : BigInt(n);
   if (v < 0n) throw new Error("varint: negative");
@@ -71,14 +65,9 @@ const ENC = new TextEncoder();
 export const ZCASH_SIGNED_MESSAGE_MAGIC = "Zcash Signed Message:\n";
 
 /**
- * Compute the Bitcoin/Zcash signed-message hash:
- *
+ * Compute the Zcash signed-message hash:
  *   dsha256(varint(magic.length) || magic || varint(msg.length) || msg)
- *
- * Zcash uses "Zcash Signed Message:\n" as the magic prefix (see
- * src/main.cpp in zcashd: `const string strMessageMagic = "Zcash Signed Message:\n";`).
- * Using Zcash's prefix — rather than Bitcoin's — ensures signatures made
- * for Zcash cannot be cross-replayed on Bitcoin and vice versa.
+ * The Zcash-specific magic prevents cross-replay with Bitcoin signatures.
  */
 export function magicHash(message: string): Uint8Array {
   const magicBytes = ENC.encode(ZCASH_SIGNED_MESSAGE_MAGIC);
@@ -94,7 +83,6 @@ export function magicHash(message: string): Uint8Array {
   return dsha256(total);
 }
 
-/** Decode a base64 string to bytes — works in both Node and browser. */
 export function base64Decode(s: string): Uint8Array {
   if (typeof atob === "function") {
     const bin = atob(s);
@@ -105,7 +93,6 @@ export function base64Decode(s: string): Uint8Array {
   return new Uint8Array(Buffer.from(s, "base64"));
 }
 
-/** Encode bytes to base64 — works in both Node and browser. */
 export function base64Encode(bytes: Uint8Array): string {
   if (typeof btoa === "function") {
     let bin = "";

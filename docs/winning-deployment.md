@@ -75,8 +75,8 @@ The script ([`scripts/setup-lightwallet-vps.sh`](../scripts/setup-lightwallet-vp
 5. Drops you into the `zingo-cli` REPL so you can run `new` (creates wallet, prints seed — **save the seed**) and `addresses` (copy your zs… or u1… address).
 6. Clones your SWZ repo.
 7. Generates a 32-char RPC token.
-8. Installs a systemd unit that runs `apps/lightwallet-rpc/src/server.mjs` with `MemoryMax=400M`.
-9. Configures nginx to proxy `https://rpc.your-domain.com` → `127.0.0.1:18232`, with rate-limiting.
+8. Installs a systemd unit that runs `apps/lightwallet-rpc/src/server.mjs` with `MemoryMax=1200M` (zingo-cli + a synced wallet comfortably fit; smaller caps OOM-kill mid-sync).
+9. Configures nginx to proxy `https://rpc.your-domain.com` → `127.0.0.1:18232` with rate-limiting **and** `proxy_read_timeout 600s` (so first syncs don't hit the default 60s timeout).
 10. Runs `certbot --nginx` to issue a TLS cert.
 11. Prints the env vars to paste into ZBooks.
 
@@ -120,9 +120,8 @@ curl -s https://rpc.your-domain.com/health
 # Restart after config changes
 sudo systemctl restart siwz-lightwallet
 
-# Re-sync the wallet manually (the wrapper does this automatically on each poll,
-# but a manual run is faster for testing)
-sudo -u siwz ~/bin/zingo-cli --data-dir ~/.zingo --command sync
+# Force a fresh per-UFVK sync (clears all wallet dirs; next request re-bootstraps with --viewkey + --birthday)
+sudo rm -rf /home/siwz/.zingo-ufvks && sudo systemctl restart siwz-lightwallet
 ```
 
 ## Bonus: ChainSafe's gRPC-Web proxy for browser-side SIWZ

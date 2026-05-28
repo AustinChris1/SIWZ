@@ -12,47 +12,35 @@ import {
   type SnapStatus,
 } from "./snap.js";
 
-/**
- * Linear states the sign-in flow walks through. Exposed so callers
- * (UIs, tests, telemetry) can render or assert on them directly.
- */
+/** Linear states the sign-in flow walks through. */
 export type SiwzStatus =
-  | "idle"           // nothing started
-  | "addressEntry"   // user is entering their Zcash address
-  | "fetchingNonce"  // calling the server for a fresh nonce
-  | "awaitingSignature" // challenge is built, waiting for user to paste signature
-  | "verifying"      // submitting to server for verification
-  | "success"        // signed in
-  | "error";         // failed at some step
+  | "addressEntry"
+  | "fetchingNonce"
+  | "awaitingSignature"
+  | "verifying"
+  | "success"
+  | "error";
 
 export interface UseSiwzOptions {
   /** The domain to embed in the message (e.g. window.location.host). */
   domain: string;
   /** The URI to embed (e.g. window.location.origin). */
   uri: string;
-  /** Zcash network — must match the address the user provides. */
+  /** Zcash network. Must match the address the user provides. */
   network: Network;
   /** Optional human-readable statement (shown verbatim inside the challenge). */
   statement?: string;
   /** How long the challenge is valid for, in seconds. Default 600 (10 min). */
   expirationSeconds?: number;
-  /** Fetch a fresh, server-issued nonce. Required — never generate client-side. */
+  /** Fetch a fresh, server-issued nonce. Never generate client-side. */
   getNonce: () => Promise<string>;
-  /**
-   * Submit the (message, signature) pair to the server for verification.
-   * Typically wraps NextAuth's `signIn("siwz", {message, signature, redirect:false})`.
-   */
+  /** Submit the (message, signature) pair to the server. Typically wraps NextAuth's signIn. */
   submit: (args: { message: string; signature: string }) => Promise<
     { ok: true } | { ok: false; error: string }
   >;
   /**
-   * OPTIONAL: handle MetaMask Zcash-Snap sign-in. When provided, the
-   * component shows a "Sign in with MetaMask" button that connects to
-   * the Snap, fetches the account's seed fingerprint + UFVK, and hands
-   * them to this callback. Apps typically wire this to a separate
-   * NextAuth provider (e.g. `signIn("snap", info)`) — Snap-auth is a
-   * permission-based identity model, distinct from SIWZ's signature-
-   * based one. See @siwz/react docs for the trade-off.
+   * Optional MetaMask Zcash-Snap handler. Receives the Snap identity tuple;
+   * typically forwarded to a separate NextAuth provider.
    */
   onSnapAuth?: (info: SnapIdentity) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
@@ -72,11 +60,7 @@ export interface UseSiwzReturn {
   submitSignature: () => Promise<void>;
   /** Reset back to address-entry. */
   reset: () => void;
-  /**
-   * Connect to the MetaMask Zcash Snap and authenticate via the caller's
-   * `onSnapAuth` callback. Returns true on success, false otherwise.
-   * Throws if `onSnapAuth` is not configured on the options object.
-   */
+  /** Connect to the Zcash Snap and authenticate via `onSnapAuth`. Returns true on success. */
   trySnapSignIn: (snapId?: string) => Promise<boolean>;
   snapStatus: SnapStatus | null;
 }
@@ -172,11 +156,7 @@ export function useSiwz(opts: UseSiwzOptions): UseSiwzReturn {
       try {
         const identity = await snapConnect(snapId);
         setSnapStatus({ kind: "ready", snapId: identity.snapId, version: identity.snapVersion });
-        // Surface the UFVK-derived "address" as the displayed identity.
-        // We don't have a real Zcash address from the Snap (no getAddress
-        // RPC), so show the seed fingerprint — apps can replace this with
-        // a real receiver address after deriving it from the UFVK if they
-        // wish.
+        // The Snap exposes no getAddress RPC, so display the seed fingerprint as the identity.
         setAddress(`snap:${identity.fingerprint.slice(0, 16)}`);
         setStatus("verifying");
         const submission = await opts.onSnapAuth(identity);

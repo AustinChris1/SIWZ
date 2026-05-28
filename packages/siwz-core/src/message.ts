@@ -6,17 +6,13 @@ const ENC = new TextEncoder();
 
 const NONCE_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-/**
- * Generate a cryptographically-random alphanumeric nonce. Defaults to 16
- * characters (≈95 bits of entropy) which is ample to prevent replay.
- */
+/** Cryptographically random alphanumeric nonce. Default 16 chars (~95 bits). */
 export function generateNonce(length = 16): string {
   if (length < 8) throw new Error("nonce length must be >= 8");
   const bytes = new Uint8Array(length);
   if (typeof globalThis.crypto?.getRandomValues === "function") {
     globalThis.crypto.getRandomValues(bytes);
   } else {
-    // Node ≥18 has globalThis.crypto, but fall back defensively.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { randomFillSync } = require("node:crypto");
     randomFillSync(bytes);
@@ -32,33 +28,7 @@ const ISO_8601_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\
 const DOMAIN_REGEX = /^[A-Za-z0-9.-]+(?::\d+)?$/;
 const NONCE_REGEX = /^[A-Za-z0-9]{8,}$/;
 
-/**
- * Canonical SIWZ message. Construct via `new SiwzMessage({...})`, render
- * to the on-wire string via `toString()`, and parse a string back via the
- * static `parse()`.
- *
- * The wire format (closely modeled on EIP-4361 / "Sign-In with Ethereum"):
- *
- *   {domain} wants you to sign in with your Zcash account:
- *   {address}
- *
- *   [{statement}]
- *
- *   URI: {uri}
- *   Version: {version}
- *   Network: {network}
- *   Nonce: {nonce}
- *   Issued At: {issuedAt}
- *   [Expiration Time: {expirationTime}]
- *   [Not Before: {notBefore}]
- *   [Request ID: {requestId}]
- *   [Resources:
- *   - {resource}
- *   - {resource}]
- *
- * The statement, if present, sits between the address line and the
- * key-value block, separated by blank lines on both sides.
- */
+/** Canonical SIWZ message. Wire format follows EIP-4361 with "Network:" replacing "Chain ID:". */
 export class SiwzMessage implements SiwzFields {
   domain: string;
   address: string;
@@ -89,10 +59,7 @@ export class SiwzMessage implements SiwzFields {
     this.validate();
   }
 
-  /**
-   * Validate field-level invariants. Throws SiwzError("INVALID_MESSAGE")
-   * on the first problem found. Called automatically by the constructor.
-   */
+  /** Validate field-level invariants. Throws SiwzError("INVALID_MESSAGE") on first problem. */
   validate(): void {
     const fail = (msg: string): never => {
       throw new SiwzError("INVALID_MESSAGE", msg);
@@ -118,8 +85,6 @@ export class SiwzMessage implements SiwzFields {
     if (this.statement && /[\r\n]/.test(this.statement)) {
       fail("statement must not contain newlines");
     }
-    // Address is validated by attempting to parse it. Reject only if the
-    // network in the message conflicts with the network the address encodes.
     const parsed = parseAddress(this.address);
     if (parsed.network !== this.network) {
       fail(`Address is on ${parsed.network} but message declares ${this.network}`);
@@ -154,22 +119,14 @@ export class SiwzMessage implements SiwzFields {
     return ENC.encode(this.toString());
   }
 
-  /**
-   * Check time-based validity against `now` (defaults to the current
-   * wall-clock time). Returns null if currently valid, otherwise the
-   * specific error code.
-   */
+  /** Returns null if currently valid, otherwise the relevant error code. */
   checkTimeValidity(now: Date = new Date()): "EXPIRED" | "NOT_YET_VALID" | null {
     if (this.expirationTime && new Date(this.expirationTime) <= now) return "EXPIRED";
     if (this.notBefore && new Date(this.notBefore) > now) return "NOT_YET_VALID";
     return null;
   }
 
-  /**
-   * Parse the on-wire string form back into a SiwzMessage. The parser is
-   * strict: any deviation from the canonical format is rejected so that
-   * round-tripping is guaranteed (`SiwzMessage.parse(m.toString()).toString() === m.toString()`).
-   */
+  /** Strict parser. Guarantees `SiwzMessage.parse(m.toString()).toString() === m.toString()`. */
   static parse(input: string): SiwzMessage {
     if (typeof input !== "string") {
       throw new SiwzError("INVALID_MESSAGE", "message must be a string");
@@ -187,18 +144,16 @@ export class SiwzMessage implements SiwzFields {
     const address = lines[1]!;
     if (!address) throw new SiwzError("INVALID_MESSAGE", "missing address line");
 
-    // Optional statement: if line 2 is blank and line 3 is non-empty and
-    // line 4 is blank, then line 3 is the statement.
+    // Optional statement sits between blank lines; the heuristic skips lines
+    // that already look like "Key: value" to avoid swallowing the first header.
     let cursor = 2;
     let statement: string | undefined;
     if (lines[2] === "" && lines[3] && lines[3] !== "" && !lines[3].includes(": ")) {
-      // Treat as statement only if it doesn't look like a key:value line.
       if (lines[4] === "") {
         statement = lines[3];
         cursor = 5;
       }
     }
-    // Otherwise expect just a blank separator.
     if (statement === undefined) {
       if (lines[2] !== "") {
         throw new SiwzError("INVALID_MESSAGE", "expected blank line after address");

@@ -1,15 +1,6 @@
-/**
- * Generate a fresh Zcash transparent (t-addr) keypair for use as the
- * SIWZ memo-challenge service address.
- *
- *   node scripts/gen-service-address.mjs [--network mainnet|testnet]
- *
- * Writes the WIF + address to ./.service-address.local.txt (gitignored)
- * and prints the address to stdout so you can paste it into .env.local.
- *
- * Keep the WIF file secret. Funds sent to the service address are yours
- * — lose the WIF, lose the funds.
- */
+// Generate a fresh Zcash t-addr keypair for use as the SIWZ memo-challenge service address.
+// Run with: node scripts/gen-service-address.mjs [--network mainnet|testnet]
+// Writes WIF + address to ./.service-address.local.txt (gitignored). Keep that file secret.
 import { writeFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { secp256k1 } from "@noble/curves/secp256k1";
@@ -28,14 +19,12 @@ const ver = NETWORK_VERSION[network];
 const priv = randomBytes(32);
 const pub = secp256k1.getPublicKey(priv, /* compressed */ true);
 
-// Address (P2PKH compressed)
 const addrPayload = new Uint8Array(22);
 addrPayload[0] = ver.p2pkh[0];
 addrPayload[1] = ver.p2pkh[1];
 addrPayload.set(hash160(pub), 2);
 const address = base58checkEncode(addrPayload);
 
-// WIF (compressed)
 const wifPayload = new Uint8Array(34);
 wifPayload[0] = ver.wif;
 wifPayload.set(priv, 1);

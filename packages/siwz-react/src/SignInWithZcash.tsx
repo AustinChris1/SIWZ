@@ -7,21 +7,11 @@ export interface SignInWithZcashProps extends UseSiwzOptions {
   buttonLabel?: string;
   /** Callback fired on successful sign-in. */
   onSuccess?: () => void;
-  /**
-   * Enable the MetaMask + Zcash-Snap one-click path. When MetaMask and the
-   * Snap are detected the component shows a "Sign in with MetaMask" button
-   * as the primary action and the paste flow as a fallback. Default: false
-   * (paste-only — works with every wallet today).
-   */
+  /** Enable the MetaMask + Zcash-Snap one-click path. Default: false. */
   enableSnap?: boolean;
   /** Override the Snap ID. Default: `npm:@chainsafe/webzjs-zcash-snap`. */
   snapId?: string;
-  /**
-   * Called when the user clicks "Use a different wallet" under the Snap
-   * primary button. When provided, the click goes to the parent (e.g.
-   * to switch to a sibling tab) instead of revealing the paste flow in
-   * place. When omitted, the legacy in-place behaviour is preserved.
-   */
+  /** Click handler for "Use a different wallet". When omitted, reveals the paste flow in place. */
   onUseDifferentWallet?: () => void;
   /** Override classNames for fine-grained styling. */
   classNames?: Partial<{
@@ -36,18 +26,8 @@ export interface SignInWithZcashProps extends UseSiwzOptions {
 }
 
 /**
- * Drop-in "Sign in with Zcash" component.
- *
- * Renders a three-step flow:
- *   1. Address entry — user pastes their Zcash address (t/z/u).
- *   2. Challenge display — the canonical SIWZ message is shown with a
- *      copy button and per-wallet "how to sign" tips. User signs in
- *      their wallet (zcashd CLI, Zodl, Zingo, YWallet, etc.) and
- *      pastes the resulting base64 signature back.
- *   3. Verification — message + signature are posted to the server.
- *
- * Styling is minimal-default. Import `@siwz/react/styles.css` for the
- * polished default look or override via `classNames`.
+ * Drop-in "Sign in with Zcash" component: address entry, challenge display, signature verification.
+ * Import `@siwz/react/styles.css` for default styling, or override via `classNames`.
  */
 export function SignInWithZcash(props: SignInWithZcashProps) {
   const {
@@ -76,11 +56,15 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
     };
   }, [enableSnap, snapId]);
 
+  // Fire onSuccess as an effect so we don't trigger parent re-renders mid-render.
+  useEffect(() => {
+    if (s.status === "success" && onSuccess) onSuccess();
+  }, [s.status, onSuccess]);
+
   const cn = (key: keyof NonNullable<typeof classNames>, fallback: string) =>
     classNames[key] ?? fallback;
 
   if (s.status === "success") {
-    if (onSuccess) onSuccess();
     return (
       <div className={cn("root", "siwz-root")}>
         <div className={cn("success", "siwz-success")}>
@@ -102,7 +86,6 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
             onClick={async () => {
               const ok = await s.trySnapSignIn(snapId);
               if (!ok) {
-                // Snap path failed — surface paste flow so the user has a fallback.
                 setShowPasteFlow(true);
               }
             }}

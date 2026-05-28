@@ -13,12 +13,10 @@ describe("inferMemoChallengeMode", () => {
   it("transparent t-addr → transparent-amount", () => {
     expect(inferMemoChallengeMode(serviceAddress)).toBe("transparent-amount");
   });
-  // Sapling / Unified detection is exercised via the e2e fixture; the
-  // core's parseAddress accepts those HRPs without needing a real key.
 });
 
 describe("issueMemoChallenge shielded-memo mode", () => {
-  // Use forced mode rather than a real z-addr (we have no real one in tests).
+  // Forced mode is used because tests don't have a real z-addr to derive.
   it("emits a memo + dust amount + ZIP 321 URI with memo embedded", async () => {
     const ch = await issueMemoChallenge({
       secret: SECRET,
@@ -100,8 +98,6 @@ describe("issueMemoChallenge shielded-memo mode", () => {
       secret: SECRET, serviceAddress, network: "mainnet",
       mode: "shielded-memo", identity: "alice",
     });
-    // Mode is recorded in the token; passing only an amount should fail
-    // with MISSING_OBSERVATION rather than silently succeeding.
     const res = await verifyMemoChallenge({
       secret: SECRET,
       token: ch.token,
@@ -125,8 +121,7 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
     expect(ch.token.split(".").length).toBe(2);
     expect(ch.amountZec).toMatch(/^0\.\d+$/);
     expect(BigInt(ch.amountZatoshi)).toBeGreaterThanOrEqual(zecToZatoshi("0.0001"));
-    // Amount must stay in dust range: base + 4-digit nonce = ≤ 19999 zatoshi
-    // (= 0.00019999 ZEC). Catches the bug where the random range was 2^24.
+    // Base + 4-digit nonce must stay under 0.0002 ZEC (regression guard).
     expect(BigInt(ch.amountZatoshi)).toBeLessThanOrEqual(zecToZatoshi("0.0002"));
   });
 

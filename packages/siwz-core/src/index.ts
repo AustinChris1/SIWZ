@@ -1,15 +1,4 @@
-/**
- * @siwz/core — Sign in with Zcash core protocol.
- *
- * Exports:
- *   - SiwzMessage     : build/parse the canonical SIWZ message format
- *   - generateNonce   : cryptographically random alphanumeric nonces
- *   - parseAddress    : detect & decode any Zcash address (t/z/u)
- *   - isZcashAddress  : boolean form of parseAddress for UI hints
- *   - verifyMessage   : high-level verification dispatcher (use this)
- *   - verifyTransparentSignature, verifySaplingSignature : low-level
- *   - SiwzError, type exports
- */
+/** @siwz/core — Sign in with Zcash core protocol. */
 
 export { SiwzMessage, generateNonce } from "./message.js";
 export {
@@ -61,3 +50,4 @@ export type {
   VerifyMemoChallengeOpts,
   VerifyMemoChallengeResult,
 } from "./memo-challenge.js";
+export { ZCASH_BLOCKS, type ZcashBlockName } from "./zcash-blocks.js";

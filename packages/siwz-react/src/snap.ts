@@ -1,34 +1,7 @@
 /**
- * MetaMask Snap integration for Zcash, targeting the ChainSafe WebZjs
- * Zcash Snap (npm: `@chainsafe/webzjs-zcash-snap`, directory:
- * https://snaps.metamask.io/snap/npm/chainsafe/webzjs-zcash-snap/).
- *
- * IMPORTANT — the Snap does NOT expose a signMessage RPC, so SIWZ-classic
- * (sign-a-challenge-string) cannot run via the Snap. Inspecting the
- * upstream source (packages/snap/src/rpc/* in ChainSafe/WebZjs) the
- * exposed methods are:
- *
- *   getViewingKey         → returns the account's UFVK
- *   getSeedFingerprint    → returns a stable per-seed identifier
- *   signPczt              → signs a Partially Constructed Zcash Tx
- *   setBirthdayBlock      → wallet sync hint
- *   getSnapState/setSnapState → persisted Snap-managed state
- *
- * The right auth pattern for the Snap is therefore PERMISSION-BASED, not
- * signature-based: by approving our dApp's connection to the Snap, the
- * user grants us read access to a stable account identity (the seed
- * fingerprint) and to the account's UFVK. We treat that as authentication
- * for the connecting dApp — exactly like every other Snap-using site does
- * (see e.g. ChainSafe's own webzjs.chainsafe.dev dashboard).
- *
- * This is a different threat model from SIWZ-classic: SIWZ proves spending
- * authority over a specific address via a digital signature, Snap-auth
- * proves "MetaMask approved this site for this account." Apps choosing
- * Snap-auth accept that approval as identity.
- *
- * The two paths coexist in `@siwz/react` — `SignInWithZcash` exposes
- * `onSnapAuth(info)` for the Snap path and `submit({message, signature})`
- * for the SIWZ-classic path. Apps can wire one, both, or neither.
+ * MetaMask Snap integration for Zcash, targeting the ChainSafe WebZjs Zcash Snap.
+ * The Snap exposes no signMessage RPC, so auth here is permission-based: connecting
+ * the Snap grants the dApp read access to a seed fingerprint and UFVK.
  */
 
 export const DEFAULT_SNAP_ID = "npm:@chainsafe/webzjs-zcash-snap";
@@ -57,10 +30,8 @@ declare global {
 }
 
 /**
- * Find the MetaMask provider via EIP-6963, even when other wallets
- * (Phantom, Coinbase Wallet, Brave Wallet, Rabby, …) have clobbered
- * `window.ethereum`. Falls back to legacy detection if EIP-6963 yields
- * nothing within a short window.
+ * Find the MetaMask provider via EIP-6963, falling back to legacy
+ * `window.ethereum` detection when no announce event arrives.
  */
 export async function findMetaMaskProvider(): Promise<EthereumProvider | null> {
   if (typeof window === "undefined") return null;
@@ -150,10 +121,6 @@ export async function requestSnapInstall(snapId: string = DEFAULT_SNAP_ID): Prom
   return v;
 }
 
-/**
- * Generic Snap-RPC helper. Surfaces friendly errors (user-rejected,
- * method-not-found) so callers can branch on cause.
- */
 async function invokeSnap<T = unknown>(snapId: string, method: string, params?: unknown): Promise<T> {
   const mm = await findMetaMaskProvider();
   if (!mm) throw new SnapInvokeError("no-metamask", "MetaMask was not found in this browser.");
@@ -185,21 +152,13 @@ export class SnapInvokeError extends Error {
   }
 }
 
-/**
- * Ask the Zcash Snap for the connected account's seed fingerprint —
- * a stable per-seed identifier that doesn't expose any spending power.
- * Suitable for use as a deterministic identity.
- */
+/** Returns the connected account's stable per-seed identifier (no spend authority). */
 export async function snapGetSeedFingerprint(snapId: string = DEFAULT_SNAP_ID): Promise<string> {
   const raw = await invokeSnap<unknown>(snapId, "getSeedFingerprint");
   return normaliseFingerprint(raw);
 }
 
-/**
- * Ask the Snap for the account's Unified Full Viewing Key (UFVK).
- * Read-only access to all of the account's transactions. Suitable to
- * import into accounting / analytics dApps like ZBooks.
- */
+/** Returns the account's Unified Full Viewing Key (read-only, no spend authority). */
 export async function snapGetViewingKey(snapId: string = DEFAULT_SNAP_ID): Promise<string> {
   const raw = await invokeSnap<unknown>(snapId, "getViewingKey");
   return normaliseString(raw, "getViewingKey");
@@ -208,7 +167,7 @@ export async function snapGetViewingKey(snapId: string = DEFAULT_SNAP_ID): Promi
 export interface SnapIdentity {
   /** Stable per-seed identifier (hex string). */
   fingerprint: string;
-  /** Unified Full Viewing Key — read-only, no spend authority. */
+  /** Unified Full Viewing Key. Read-only, no spend authority. */
   ufvk: string;
   /** The Snap ID this identity came from. */
   snapId: string;
@@ -217,12 +176,8 @@ export interface SnapIdentity {
 }
 
 /**
- * One-call sign-in helper: ensures the Snap is installed (prompting
- * MetaMask to install it if needed), then fetches the identity tuple
- * the app needs.
- *
- * This is the path apps should call from a "Sign in with MetaMask"
- * button — no address entry required.
+ * One-call sign-in helper: installs the Snap if needed, then fetches
+ * the identity tuple required by the app.
  */
 export async function snapConnect(snapId: string = DEFAULT_SNAP_ID): Promise<SnapIdentity> {
   let env = await detectSnapEnvironment(snapId);
@@ -242,8 +197,6 @@ export async function snapConnect(snapId: string = DEFAULT_SNAP_ID): Promise<Sna
   ]);
   return { fingerprint, ufvk, snapId: env.snapId, snapVersion: env.version };
 }
-
-// ---- helpers ----
 
 function normaliseString(raw: unknown, method: string): string {
   if (typeof raw === "string") return raw;

@@ -6,28 +6,15 @@ import { SiwzMessage } from "./message.js";
 import type { ParsedAddress, VerifyResult } from "./types.js";
 
 export interface VerifyOptions {
-  /**
-   * Expected domain (e.g. "example.com:3000"). If provided, the message's
-   * domain field must match — protects against cross-site replay.
-   */
+  /** Required domain. Protects against cross-site replay. */
   expectedDomain?: string;
-  /**
-   * Expected nonce. If your app issued a one-time nonce to this client,
-   * pass it here to ensure the user didn't replay an old signature.
-   */
+  /** Required nonce. Pass the value your app issued to this client. */
   expectedNonce?: string;
-  /**
-   * Override "now" for time-validity checks. Useful in tests.
-   */
+  /** Override "now" for time-validity checks. */
   now?: Date;
   /**
-   * Optional ZIP 304 Sapling verifier. SIWZ ships without one by default
-   * because pure-JS ZIP 304 verification is not yet practical; integrators
-   * can plug in a WASM (librustzcash) or out-of-process verifier.
-   *
-   * The function receives the message string (NOT the dsha256 magicHash),
-   * the raw signature bytes, and the parsed Sapling address. It should
-   * resolve to true iff the signature is valid for that address.
+   * Pluggable ZIP 304 Sapling verifier. Not shipped by default because
+   * pure-JS ZIP 304 isn't practical; supply a WASM (librustzcash) wrapper.
    */
   saplingVerifier?: (args: {
     message: string;
@@ -37,18 +24,11 @@ export interface VerifyOptions {
 }
 
 /**
- * Verify a transparent (P2PKH) signed-message signature.
+ * Verify a transparent P2PKH signed-message signature.
  *
  * Signature format (Bitcoin/Zcash signmessage convention):
- *   65 bytes: [recovery_byte] [r (32)] [s (32)]
+ *   65 bytes = [recovery_byte] [r (32)] [s (32)]
  *   recovery_byte = 27 + recovery_id + (compressed ? 4 : 0)
- *
- * Algorithm:
- *   1. hash = dsha256(varint(magic.len) || magic || varint(msg.len) || msg)
- *      where magic = "Zcash Signed Message:\n"
- *   2. recover pubkey from (r, s, recovery_id) and hash
- *   3. serialise pubkey in compressed or uncompressed form per the flag
- *   4. compare HASH160(pubkey_bytes) to the address's HASH160
  */
 export function verifyTransparentSignature(
   message: string,
@@ -110,20 +90,9 @@ export function verifyTransparentSignature(
 }
 
 /**
- * Verify a Sapling signed-message signature per ZIP 304.
- *
- * NOTE: ZIP 304 verification requires the Sapling Spend authorization
- * circuit, which is impractical to implement in pure JS at hackathon
- * scope. Two integration paths:
- *
- *   (a) Pass a `saplingVerifier` callback to `verifyMessage` that wraps
- *       a WASM build of librustzcash. See docs/sapling-wasm.md for the
- *       recommended approach.
- *   (b) Use the "memo-challenge" fallback: have the user send a tiny
- *       (zero-value) shielded transaction containing the SIWZ nonce in
- *       the memo to a service address you control, then verify the
- *       memo arrived. This proves ownership of *some* shielded address,
- *       though not a specific one. See docs/memo-challenge.md.
+ * Verify a ZIP 304 Sapling signed-message signature. Requires a `verifier`
+ * callback (e.g. a librustzcash WASM wrapper); pure-JS verification is not
+ * provided. As an alternative, see `memo-challenge` for a proof-of-spend flow.
  */
 export async function verifySaplingSignature(
   message: string,
@@ -169,11 +138,9 @@ export async function verifySaplingSignature(
 }
 
 /**
- * The high-level dispatcher: parse the SIWZ message, run all integrity
- * checks (domain, nonce, time window), and then verify the signature
- * using the appropriate algorithm for the address type.
- *
- * This is the function NextAuth and most consumers should call.
+ * High-level verifier: parses the message, checks domain/nonce/time, then
+ * dispatches to the per-address-type signature verifier. Use this from
+ * NextAuth and most application code.
  */
 export async function verifyMessage(
   message: string | SiwzMessage,
@@ -233,5 +200,4 @@ function failure(error: NonNullable<VerifyResult["error"]>, msg: string): Verify
   return { valid: false, error, errorMessage: msg };
 }
 
-// Re-export for ergonomics
 export { SiwzError };

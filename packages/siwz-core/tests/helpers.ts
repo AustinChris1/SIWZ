@@ -1,11 +1,7 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { base58checkEncode, hash160, magicHash } from "../src/index.js";
 
-/**
- * Derive a real mainnet t1 P2PKH address from a 32-byte private key.
- * Useful for tests that need valid checksummed addresses without
- * depending on hard-coded explorer strings.
- */
+/** Derive a real mainnet t1 P2PKH address from a 32-byte private key. */
 export function deriveMainnetP2pkh(privKey: Uint8Array, compressed = true): {
   privKey: Uint8Array;
   pubKey: Uint8Array;
@@ -32,16 +28,10 @@ export function deriveTestnetP2pkh(privKey: Uint8Array, compressed = true): {
   return { privKey, pubKey, address: base58checkEncode(payload) };
 }
 
-/**
- * A deterministic fixed private key. Repeatable across runs so tests can
- * assert against the derived address string.
- */
-export const FIXED_PRIV = new Uint8Array(32).fill(7); // 0x07 repeated
+/** Deterministic fixed private key for repeatable tests. */
+export const FIXED_PRIV = new Uint8Array(32).fill(7);
 
-/**
- * Sign a message in the Zcash signmessage wire format and return the
- * (base64 signature, derived t1 mainnet address).
- */
+/** Sign `message` per Zcash signmessage and return (base64 sig, derived t1 mainnet address). */
 export function signForTest(privKey: Uint8Array, message: string, compressed = true) {
   const { address, pubKey } = deriveMainnetP2pkh(privKey, compressed);
   const hash = magicHash(message);

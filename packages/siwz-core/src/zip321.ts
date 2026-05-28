@@ -3,35 +3,21 @@ import { SiwzError } from "./errors.js";
 import type { Network } from "./types.js";
 
 /**
- * ZIP 321 — Payment Request URI format (https://zips.z.cash/zip-0321).
- *
- * Builds and parses `zcash:<address>?amount=…&memo=<base64url>&message=…`
- * URIs. Wallets that support ZIP 321 (Zashi, YWallet, Zingo, eZcash, …)
- * open with the transaction pre-filled when the user follows the URI or
- * scans a QR-encoded form of it.
- *
- * We support the single-recipient form here. Multi-recipient (`address.1`,
- * `address.2`, …) is in the spec but unused by SIWZ memo-challenge —
- * SIWZ only ever asks the user to send one tx.
+ * ZIP 321 Payment Request URI format (https://zips.z.cash/zip-0321).
+ * Single-recipient only. Multi-recipient (`address.1`, `address.2`, ...) is
+ * in the spec but not used by SIWZ.
  */
 
 export interface ZIP321Request {
-  /** Recipient address (transparent, sapling, or unified). */
+  /** Recipient address (transparent, Sapling, or unified). */
   address: string;
-  /**
-   * Amount in ZEC as a decimal string (NOT zatoshi). E.g. "0.00001337".
-   * Required by ZIP 321 for SIWZ memo-challenge use; technically optional
-   * in the spec.
-   */
+  /** Amount in ZEC as a decimal string (not zatoshi), e.g. "0.00001337". */
   amount?: string;
-  /**
-   * Memo as a UTF-8 string. We'll base64url-encode it on the way out and
-   * base64url-decode it on the way in. Max 512 bytes per ZIP 321.
-   */
+  /** UTF-8 memo. Base64url-encoded on the wire. Max 512 bytes per ZIP 321. */
   memo?: string;
-  /** Free-text label shown by the wallet (e.g. "ZBooks"). */
+  /** Short label shown by the wallet. */
   label?: string;
-  /** Free-text message shown by the wallet (e.g. "Sign in to ZBooks"). */
+  /** Free-text message shown by the wallet. */
   message?: string;
 }
 
@@ -39,7 +25,7 @@ const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
 
 function base64urlEncode(bytes: Uint8Array): string {
-  // Same encoding as RFC 4648 §5 (URL-safe), no padding.
+  // RFC 4648 §5, no padding.
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   const b64 = typeof btoa === "function" ? btoa(bin) : Buffer.from(bin, "binary").toString("base64");
@@ -58,18 +44,9 @@ function base64urlDecode(s: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
-/**
- * Build a ZIP 321 URI. Throws SiwzError on invalid input.
- *
- * Note on amount formatting: ZIP 321 requires non-negative decimal with
- * at most 8 fractional digits. We accept either a decimal string or a
- * number; numbers are stringified with 8-digit precision. The amount
- * MUST NOT carry a thousands separator, trailing whitespace, or unit
- * suffix.
- */
+/** Build a ZIP 321 URI. Throws SiwzError on invalid input. */
 export function buildZip321(req: ZIP321Request): string {
   if (!req.address) throw new SiwzError("INVALID_ADDRESS", "ZIP 321: address required");
-  // Validate the address parses — sapling/unified/transparent all OK.
   try {
     parseAddress(req.address);
   } catch (err) {
@@ -95,10 +72,7 @@ export function buildZip321(req: ZIP321Request): string {
   return qs ? `zcash:${req.address}?${qs}` : `zcash:${req.address}`;
 }
 
-/**
- * Parse a ZIP 321 URI. Throws on malformed input. Unknown query params
- * are preserved on a `.unknown` map but not enforced.
- */
+/** Parse a ZIP 321 URI. Unknown query params are preserved on `.unknown`. */
 export function parseZip321(uri: string): ZIP321Request & { unknown: Record<string, string> } {
   if (!uri.startsWith("zcash:")) {
     throw new SiwzError("INVALID_MESSAGE", "ZIP 321: URI must start with 'zcash:'");
@@ -107,7 +81,6 @@ export function parseZip321(uri: string): ZIP321Request & { unknown: Record<stri
   const qIdx = body.indexOf("?");
   const address = qIdx === -1 ? body : body.slice(0, qIdx);
   const qs = qIdx === -1 ? "" : body.slice(qIdx + 1);
-  // Validate the address.
   parseAddress(address);
 
   const params = new URLSearchParams(qs);
@@ -144,7 +117,6 @@ const AMOUNT_RE = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
 
 function normaliseAmount(raw: string | number): string {
   let s = typeof raw === "number" ? raw.toFixed(8) : String(raw).trim();
-  // Strip trailing zeros after a decimal point, but leave at least one digit.
   if (s.includes(".")) {
     s = s.replace(/0+$/, "");
     if (s.endsWith(".")) s = s.slice(0, -1);
@@ -155,19 +127,14 @@ function normaliseAmount(raw: string | number): string {
   return s;
 }
 
-/**
- * Convert a ZEC amount string to zatoshi (1 ZEC = 10^8 zatoshi).
- * Useful for comparing on-chain tx amounts byte-for-byte.
- */
+/** 1 ZEC = 10^8 zatoshi. */
 export function zecToZatoshi(zec: string): bigint {
   const [whole, frac = ""] = zec.split(".");
   const fracPadded = (frac + "00000000").slice(0, 8);
   return BigInt(whole ?? "0") * 100_000_000n + BigInt(fracPadded);
 }
 
-/**
- * Convert zatoshi back to a normalized ZEC decimal string.
- */
+/** Convert zatoshi back to a normalised ZEC decimal string. */
 export function zatoshiToZec(zatoshi: bigint | number): string {
   const z = typeof zatoshi === "bigint" ? zatoshi : BigInt(zatoshi);
   const whole = z / 100_000_000n;
@@ -177,11 +144,7 @@ export function zatoshiToZec(zatoshi: bigint | number): string {
   return `${whole}.${fracStr}`;
 }
 
-/**
- * Optional sanity check: does this address belong to the given network?
- * Useful when building a request that the user will execute against a
- * specific network — surfaces mistakes early.
- */
+/** Throws NETWORK_MISMATCH if the address is not on the given network. */
 export function assertAddressNetwork(address: string, network: Network): void {
   const parsed = parseAddress(address);
   if (parsed.network !== network) {
