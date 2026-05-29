@@ -27,10 +27,10 @@ describe("issueMemoChallenge shielded-memo mode", () => {
     });
     expect(ch.mode).toBe("shielded-memo");
     expect(ch.memo).toMatch(/^SIWZ:[A-Za-z0-9]{12}$/);
-    expect(ch.amountZec).toBe("0.00001");
+    expect(ch.amountZec).toBe("0.000001");
     const parsedUri = parseZip321(ch.uri);
     expect(parsedUri.memo).toBe(ch.memo);
-    expect(parsedUri.amount).toBe("0.00001");
+    expect(parsedUri.amount).toBe("0.000001");
   });
 
   it("round-trip verify succeeds with matching memo", async () => {

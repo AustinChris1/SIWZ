@@ -27,3 +27,6 @@ apps/demo/data/*.json
 docs.zip
 docs/private/
 scripts/push-wrapper.sh
+
+.vercel
+.env*

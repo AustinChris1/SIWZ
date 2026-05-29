@@ -151,7 +151,7 @@ export async function issueMemoChallenge(opts: IssueMemoChallengeOpts): Promise<
     };
   }
 
-  const dust = zecToZatoshi(opts.baseAmountZec ?? "0.00001");
+  const dust = zecToZatoshi(opts.baseAmountZec ?? "0.000001");
   // 12 alphanumeric chars = ~70 bits of entropy.
   const nonce = randomAlphanumeric(12);
   const memo = formatMemo(nonce);

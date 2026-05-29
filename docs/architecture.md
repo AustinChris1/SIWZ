@@ -19,7 +19,7 @@ The `MemoSignIn` and `SignInWithZcash` components live side by side in the UI. A
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Your app                                                    │
-│  (ZBooks · example-comments · anything you build next)       │
+│  (ZBooks · ZecWall · anything you build next)                │
 ├──────────────────────────────────────────────────────────────┤
 │  @siwz/react        components · hooks · QR · polling        │
 ├──────────────────────────────────────────────────────────────┤

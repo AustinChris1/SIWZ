@@ -109,4 +109,4 @@ Once published:
 pnpm add @siwz/core @siwz/react @siwz/next-auth next-auth
 ```
 
-A minimal NextAuth setup is in `docs/quickstart.md`; a full multi-flow integration is in [`apps/example-comments/`](../apps/example-comments) and [`apps/demo/`](../apps/demo) (ZBooks).
+A minimal NextAuth setup is in `docs/quickstart.md`; a full multi-flow integration is in [`apps/zecwall/`](../apps/zecwall) (ZecWall) and [`apps/demo/`](../apps/demo) (ZBooks).

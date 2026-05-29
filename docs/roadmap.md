@@ -9,7 +9,7 @@ Where this is going after the hackathon.
 - `@siwz/next-auth`: credentials provider, stateless HMAC nonces, snap envelope.
 - Three sign-in flows: signmessage paste, memo-challenge (ZIP 321), MetaMask Zcash Snap.
 - Two backends for shielded memo decryption: full zcashd RPC, light wallet via `zingo-cli` wrapper.
-- Two reference apps: ZBooks (full production-shape), example-comments (~150-line minimal).
+- Two reference apps: ZBooks (full production-shape), ZecWall (~150-line minimal comments wall).
 - ZBooks payouts: non-custodial batch contributor payments via multi-recipient ZIP 321, treasury pre-flight balance check, and auto-reconciliation against the viewing key. See [zbooks-payouts.md](./zbooks-payouts.md).
 - Four end-to-end test scripts covering paste, memo (transparent + shielded), Snap, and payouts (`e2e-payouts.mjs`).
 - Deployment recipe for a $3/mo VPS doing shielded sign-in on real mainnet.

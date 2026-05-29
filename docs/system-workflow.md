@@ -19,7 +19,7 @@ The thesis: infrastructure (SIWZ) plus a real app that uses it (ZBooks) is a str
 | `packages/siwz-react` | The `<SignInWithZcash />` and `<MemoSignIn />` components, the `useSiwz()` hook, and MetaMask Snap detection. |
 | `packages/siwz-next-auth` | A NextAuth provider, the stateless HMAC nonce helpers, and the snap envelope signing. |
 | `apps/demo` | ZBooks itself (package name `@zbooks/app`). |
-| `apps/example-comments` | A minimal app that uses SIWZ, to show the library in isolation. |
+| `apps/zecwall` | ZecWall, a minimal app that uses SIWZ to show the library in isolation. |
 | `apps/lightwallet-rpc` | A small Node service that runs on a cheap VPS, wraps `zingo-cli`, and gives ZBooks shielded read access over HTTPS. |
 
 ## Authentication: three ways to sign in

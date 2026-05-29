@@ -86,7 +86,7 @@ export function SignIn() {
 }
 ```
 
-That is the whole integration. Full version: [quickstart.md](./quickstart.md). Reference app: `apps/example-comments` (the "Signed message" tab).
+That is the whole integration. Full version: [quickstart.md](./quickstart.md). Reference app: `apps/zecwall` (the "Signed message" tab).
 
 ---
 
@@ -143,7 +143,7 @@ return new Response(null, { status: 202 }); // keep polling
 (`hmac(secret, "memo::" + identity)`) so a client cannot forge the result, and a
 client that shows the QR from `issue` and polls `poll` until 200.
 
-Reference implementation to copy: `apps/example-comments` (issue route, poll
+Reference implementation to copy: `apps/zecwall` (issue route, poll
 route, the `MemoFlow` component, and the `memo` provider in `src/lib/auth.ts`).
 A fuller version with auto-reconciliation lives in `apps/demo`.
 
@@ -198,7 +198,7 @@ notes for the full story.
 
 ## Offering more than one, or a custom UI
 
-`apps/example-comments` shows all three behind tabs in about 150 lines. If you
+`apps/zecwall` shows all three behind tabs in about 150 lines. If you
 want your own UI for the signed-message and snap flows, use the headless
 `useSiwz()` hook from `@siwz/react` instead of `SignInWithZcash`; it returns the
 state machine (`status`, `buildChallenge`, `submitSignature`, `trySnapSignIn`,
