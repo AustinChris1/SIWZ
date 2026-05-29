@@ -4,17 +4,17 @@ Where this is going after the hackathon.
 
 ## v0.1 (this submission)
 
-- ✅ `@siwz/core` — protocol primitives, ZIP 321 builder/parser, transparent and shielded memo-challenge, pure-TS verification, 54 tests.
-- ✅ `@siwz/react` — `<SignInWithZcash />`, `<MemoSignIn />`, `useSiwz()`, MetaMask Snap detection, EIP-6963 multi-wallet discovery.
-- ✅ `@siwz/next-auth` — credentials provider, stateless HMAC nonces, snap envelope.
-- ✅ Three sign-in flows: signmessage paste, memo-challenge (ZIP 321), MetaMask Zcash Snap.
-- ✅ Two backends for shielded memo decryption: full zcashd RPC, light wallet via `zingo-cli` wrapper.
-- ✅ Two reference apps: ZBooks (full production-shape), example-comments (~150-line minimal).
-- ✅ ZBooks payouts: non-custodial batch contributor payments via multi-recipient ZIP 321, treasury pre-flight balance check, and auto-reconciliation against the viewing key. See [zbooks-payouts.md](./zbooks-payouts.md).
-- ✅ Four end-to-end test scripts covering paste, memo (transparent + shielded), Snap, and payouts (`e2e-payouts.mjs`).
-- ✅ Deployment recipe for a $3/mo VPS doing shielded sign-in on real mainnet.
+- `@siwz/core`: protocol primitives, ZIP 321 builder/parser, transparent and shielded memo-challenge, pure-TS verification, 59 tests.
+- `@siwz/react`: `<SignInWithZcash />`, `<MemoSignIn />`, `useSiwz()`, MetaMask Snap detection, EIP-6963 multi-wallet discovery.
+- `@siwz/next-auth`: credentials provider, stateless HMAC nonces, snap envelope.
+- Three sign-in flows: signmessage paste, memo-challenge (ZIP 321), MetaMask Zcash Snap.
+- Two backends for shielded memo decryption: full zcashd RPC, light wallet via `zingo-cli` wrapper.
+- Two reference apps: ZBooks (full production-shape), example-comments (~150-line minimal).
+- ZBooks payouts: non-custodial batch contributor payments via multi-recipient ZIP 321, treasury pre-flight balance check, and auto-reconciliation against the viewing key. See [zbooks-payouts.md](./zbooks-payouts.md).
+- Four end-to-end test scripts covering paste, memo (transparent + shielded), Snap, and payouts (`e2e-payouts.mjs`).
+- Deployment recipe for a $3/mo VPS doing shielded sign-in on real mainnet.
 
-## v0.2 — wallet UX
+## v0.2: wallet UX
 
 - **`zcash:` URI return-callback support.** Wallets currently send the user to confirm the tx and... leave them there. If wallets honored `?callback=https://app.example.com/done`, the sign-in flow becomes one continuous interaction with no manual tab-switch.
   - Action: propose a ZIP extension (or document the convention if one exists), submit PRs to Zashi / YWallet / Zingo to honor it.
@@ -22,33 +22,33 @@ Where this is going after the hackathon.
 - **Wallet-side "this is a sign-in" indicator.** When a `zcash:` URI carries a recognized SIWZ memo prefix (`SIWZ:…`), wallets should label the confirm screen differently ("Sign in to {dApp}") so users know they're authenticating, not paying for a thing.
 - **ZBooks PCZT one-click payouts.** Today a payout run is a multi-recipient ZIP 321 URI the treasurer scans in a multi-recipient wallet (YWallet/Zingo). When the ChainSafe snap's `signPczt` (or a published in-browser wallet lib) is usable, ZBooks builds the transaction itself from the viewing key and the treasurer just approves, removing the per-recipient wallet-support caveat. Still non-custodial: ZBooks never holds the spending key.
 
-## v0.3 — ZIP 304 signed messages
+## v0.3: ZIP 304 signed messages
 
 - **Wire up shielded signmessage** behind the existing `verifySaplingSignature` plug-in point in `@siwz/core`.
 - **Bundle a librustzcash WASM build** that ships as `@siwz/sapling-verify-wasm`. Drop-in: integrators add one package and get shielded `signmessage` verification without spinning up a daemon.
 - **Coordinate with wallet teams** on consistent UX. ZIP 304 has been Draft since 2019; SIWZ adoption is a forcing function for wallets to ship a stable implementation.
 
-## v0.4 — ZSAs as identity tokens
+## v0.4: ZSAs as identity tokens
 
 Once [ZIP 226/227](https://zips.z.cash/zip-0226) (Zcash Shielded Assets) are activated and wallet support stabilizes, SIWZ extends to a fourth flow:
 
 - **Issue a non-transferable ZSA** that represents membership in a community / team / dApp.
 - **Sign in by proving you hold the ZSA.** Same memo-challenge mechanic, but the verifier checks for the ZSA presence instead of (or in addition to) the dust payment.
-- **Use case for ZBooks:** treasurer-issued team-membership ZSAs. Adding a new member to your books is "send them a ZBooks-Treasurer ZSA" — no admin clicks in our UI, the membership IS the asset.
+- **Use case for ZBooks:** treasurer-issued team-membership ZSAs. Adding a new member to your books is "send them a ZBooks-Treasurer ZSA", with no admin clicks in our UI, since the membership IS the asset.
 - **Use case for SIWZ generally:** invite-only communities (DAOs, paid newsletters, alpha betas). Holders of `@MyCool DAO Member` ZSAs sign in instantly with no payment.
 
 This is the "v2 story" judges should see in the roadmap section of the submission. It maps directly onto the Infrastructure track's `ZSA GUI` example.
 
-## v0.5 — multi-tenant SIWZ as a service
+## v0.5: multi-tenant SIWZ as a service
 
 A hosted version of `@siwz/next-auth` running at `auth.siwz.dev` so apps that don't want to host the verifier themselves can point at it:
 
 - Configurable per-app: their domain, their service address, their callback URL.
 - Stateless: the HMAC-signed nonce model keeps it serverless.
 - Free tier for hackathon / hobbyist projects, paid tier for production volume.
-- This is what made SIWE's adoption explode — most apps consumed it through a hosted RPC (Web3Modal, etc.) rather than rolling their own.
+- This is what made SIWE's adoption explode: most apps consumed it through a hosted RPC (Web3Modal, etc.) rather than rolling their own.
 
-## v1.0 — protocol-shaped governance
+## v1.0: protocol-shaped governance
 
 Once SIWZ has even a handful of independent integrations, draft a formal protocol document and submit it as a ZIP. The current spec lives in `docs/spec.md`; promoting it to an actual ZIP gives ecosystem partners (wallets, identity tools, DAO platforms) a fixed reference to implement against.
 
@@ -57,10 +57,10 @@ Once SIWZ has even a handful of independent integrations, draft a formal protoco
 If you're reading this and you maintain or use a Zcash wallet:
 
 - **Test the memo-challenge flow.** Open ZBooks at `https://zbooks.your-domain.com`, click sign-in, scan with your wallet. Tell us where it broke.
-- **Open PRs against your wallet** for the v0.2 UX items above — callbacks, OS protocol handlers, sign-in labels.
-- **Use SIWZ in your next hackathon project.** The whole point is composability. If you ship a Zcash app for the next ZecHub hackathon and it has user auth, you should be able to wire SIWZ in an afternoon. If you can't, that's a SIWZ bug — report it.
+- **Open PRs against your wallet** for the v0.2 UX items above: callbacks, OS protocol handlers, sign-in labels.
+- **Use SIWZ in your next hackathon project.** The whole point is composability. If you ship a Zcash app for the next ZecHub hackathon and it has user auth, you should be able to wire SIWZ in an afternoon. If you can't, that's a SIWZ bug, so report it.
 
 If you're a Zcash ecosystem org (ECC, ZF, Zechub, ZCG):
 
 - **Subsidize the hosted multi-tenant verifier** in v0.5. Cost is trivial; impact on adoption is huge.
-- **Reference SIWZ in your developer onboarding** the way Ethereum docs reference SIWE. The biggest lift to SIWE's adoption wasn't the code — it was being the obvious default.
+- **Reference SIWZ in your developer onboarding** the way Ethereum docs reference SIWE. The biggest lift to SIWE's adoption wasn't the code; it was being the obvious default.

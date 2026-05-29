@@ -74,7 +74,7 @@ const saplingVerifier = async ({ message, signature, address }) =>
 
 We could compile and pin a build, but:
 
-- It's ~500KB of WASM — a hard ask to make mandatory for every consumer when 95% of demo signups are transparent.
+- It's ~500KB of WASM, a hard ask to make mandatory for every consumer when 95% of demo signups are transparent.
 - The ZIP 304 spec is still labelled Draft. Pinning a specific implementation locks consumers into our version cadence.
 - Different deployment environments (browser, Node, edge) want different builds.
 

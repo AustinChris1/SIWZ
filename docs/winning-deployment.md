@@ -1,4 +1,4 @@
-# Winning deployment — shielded SIWZ on a $3/mo VPS
+# Winning deployment: shielded SIWZ on a $3/mo VPS
 
 > The deployment shape that makes the hackathon submission "actually Zcash-native": shielded service address, real on-chain memo decryption, no 60GB blockchain sync. Total monthly cost: **~$3** (RackNerd 2GB) or **~$5** (Hetzner CX22).
 
@@ -6,7 +6,7 @@
 
 ```
 ┌─────────────────────────────┐         ┌──────────────────────────────┐
-│  Vercel — ZBooks + UI       │         │  $3/mo VPS                   │
+│  Vercel - ZBooks + UI       │         │  $3/mo VPS                   │
 │  - Next.js, NextAuth        │ ──HTTPS→│  - zingo-cli (lite, ~50 MB)  │
 │  - Memo-challenge issuer    │         │  - lightwallet-rpc wrapper   │
 │  - Auto-poll loop           │         │  - nginx + Let's Encrypt     │
@@ -28,7 +28,7 @@ All three are view-only. The wrapper reads with viewing keys and never spends. Z
 
 ## Why this avoids the 60–300 GB requirement
 
-A standard "full" shielded verifier stack is **Zebra (or zcashd) full node + lightwalletd + your app**. The Zebra full node needs the entire blockchain locally — about 250–300 GB today and growing. lightwalletd is *just an indexer* in front of Zebra; it can't function alone.
+A standard "full" shielded verifier stack is **Zebra (or zcashd) full node + lightwalletd + your app**. The Zebra full node needs the entire blockchain locally, about 250 to 300 GB today and growing. lightwalletd is *just an indexer* in front of Zebra; it can't function alone.
 
 We sidestep that by **not running our own full node at all**. Instead we point `zingo-cli` at a **public lightwalletd**, the same backend used by wallets like Zashi and YWallet. The wrapper passes `--server` explicitly and defaults to `https://zec.rocks:443`, the community-run endpoint that is actively maintained. Public lightwalletd use is common and accepted per ZecHub developer guidance.
 
@@ -65,7 +65,7 @@ Environment=LIGHTWALLETD=https://zec.rocks:443,https://na.zec.rocks:443,https://
 After provisioning the VPS, SSH in and run:
 
 ```bash
-# Optional but recommended on tight VPS — 2GB swap as safety net
+# Optional but recommended on a tight VPS: 2GB swap as a safety net
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
@@ -83,7 +83,7 @@ The script ([`scripts/setup-lightwallet-vps.sh`](../scripts/setup-lightwallet-vp
 2. Configures firewall (SSH + nginx, nothing else).
 3. Creates a dedicated `siwz` user.
 4. Installs `zingo-cli` (precompiled if available, source build otherwise).
-5. Drops you into the `zingo-cli` REPL so you can run `new` (creates wallet, prints seed — **save the seed**) and `addresses` (copy your zs… or u1… address).
+5. Drops you into the `zingo-cli` REPL so you can run `new` (creates wallet, prints seed; **save the seed**) and `addresses` (copy your zs… or u1… address).
 6. Clones your SWZ repo.
 7. Generates a 32-char RPC token.
 8. Installs a systemd unit that runs `apps/lightwallet-rpc/src/server.mjs` with `MemoryMax=1200M` (zingo-cli + a synced wallet comfortably fit; smaller caps OOM-kill mid-sync).
@@ -98,7 +98,7 @@ End state: a `curl https://rpc.your-domain.com/health` returns `{ok: true}`.
 In your Vercel project settings (or wherever you host ZBooks):
 
 ```env
-SIWZ_SERVICE_ADDRESS=zs1...   # or u1... — the address you copied from zingo-cli
+SIWZ_SERVICE_ADDRESS=zs1...   # or u1..., the address you copied from zingo-cli
 LIGHTWALLET_RPC_URL=https://rpc.your-domain.com
 LIGHTWALLET_RPC_TOKEN=<the long random token the installer printed>
 SIWZ_DEMO=0
@@ -113,7 +113,7 @@ Redeploy. The `getShieldedExplorer()` dispatcher in [`apps/demo/src/lib/explorer
 3. ZBooks issues a memo-challenge. UI renders a QR encoding `zcash:zs1...?amount=0.00001&memo=U0lXWjpAYmNkZWY...` (base64url of `SIWZ:abcdef…`).
 4. User scans the QR with Zashi / YWallet / Zingo. Wallet opens with the tx pre-filled.
 5. User confirms. The shielded tx broadcasts.
-6. ~75 seconds later, `lightwalletd` includes the block. `zingo-cli` on the VPS decrypts the note with your IVK. The memo `SIWZ:abcdef…` becomes visible to `zingo-cli list`.
+6. Usually within 5 to 15 seconds, `lightwalletd` includes the block. `zingo-cli` on the VPS decrypts the note with your IVK. The memo `SIWZ:abcdef…` becomes visible to `zingo-cli list`.
 7. ZBooks's polling loop hits `https://rpc.your-domain.com/memos`. The wrapper shells out to `zingo-cli list`, finds the matching memo, returns it.
 8. ZBooks's poll endpoint matches the nonce in the memo against the issued challenge token, mints a NextAuth session, signs the user in.
 
@@ -137,7 +137,7 @@ sudo rm -rf /home/siwz/.zingo-ufvks && sudo systemctl restart siwz-lightwallet
 
 ## Bonus: ChainSafe's gRPC-Web proxy for browser-side SIWZ
 
-If you build a future SIWZ-using app that runs **entirely in the browser** (no Node backend at all), you'll need a **gRPC-Web** endpoint — browsers cannot speak raw gRPC to a normal lightwalletd. ChainSafe runs a public gRPC-Web proxy specifically for this:
+If you build a future SIWZ-using app that runs **entirely in the browser** (no Node backend at all), you'll need a **gRPC-Web** endpoint, because browsers cannot speak raw gRPC to a normal lightwalletd. ChainSafe runs a public gRPC-Web proxy specifically for this:
 
 ```
 https://zcash-mainnet.chainsafe.dev
@@ -145,7 +145,7 @@ https://zcash-mainnet.chainsafe.dev
 
 This is what ChainSafe's WebZjs library and Zcash MetaMask Snap use. Our `zingo-cli`-based architecture doesn't use it (zingo speaks raw gRPC), but if you wire SIWZ directly into a browser app via WebZjs in the future, this is the endpoint to pass.
 
-> **Honest note on WebZjs as a Node library**: as of this writing (May 2026), the `@chainsafe/webzjs-wallet` npm package referenced in WebZjs's repo README is **not yet published** to the npm registry — I verified against `https://registry.npmjs.com/@chainsafe/webzjs-wallet` (404). The only ChainSafe WebZjs-related package currently installable from npm is `@chainsafe/webzjs-zcash-snap` (the MetaMask Snap), which we integrate via [`packages/siwz-react/src/snap.ts`](../packages/siwz-react/src/snap.ts). When ChainSafe publishes the lite-wallet library, a future `WebZjsExplorer` could replace this VPS in pure-serverless deployments. For now, `zingo-cli` on a small VPS is the only working server-side option for shielded sign-in.
+> **Honest note on WebZjs as a Node library**: as of this writing (May 2026), the `@chainsafe/webzjs-wallet` npm package referenced in WebZjs's repo README is **not yet published** to the npm registry. I verified against `https://registry.npmjs.com/@chainsafe/webzjs-wallet` (404). The only ChainSafe WebZjs-related package currently installable from npm is `@chainsafe/webzjs-zcash-snap` (the MetaMask Snap), which we integrate via [`packages/siwz-react/src/snap.ts`](../packages/siwz-react/src/snap.ts). When ChainSafe publishes the lite-wallet library, a future `WebZjsExplorer` could replace this VPS in pure-serverless deployments. For now, `zingo-cli` on a small VPS is the only working server-side option for shielded sign-in.
 
 If you ever want to migrate the wallet to another VPS:
 
@@ -164,9 +164,9 @@ sudo systemctl start siwz-lightwallet
 
 - **The bearer token is your only auth.** Treat it like an API key. Don't commit it. Rotate by editing the systemd unit + restarting.
 - **TLS is mandatory.** Without it, the memos and token transit in plaintext over the public internet.
-- **The VPS holds your wallet's spending key.** This is unavoidable — `zingo-cli` needs the full viewing+spending key to sync. If you want privilege separation, generate the address on a separate machine and import only the IVK into the VPS via `z_importviewingkey`. The wrapper will still work read-only with just the IVK.
+- **The VPS holds your wallet's spending key.** This is unavoidable: `zingo-cli` needs the full viewing+spending key to sync. If you want privilege separation, generate the address on a separate machine and import only the IVK into the VPS via `z_importviewingkey`. The wrapper will still work read-only with just the IVK.
 - **The VPS does NOT need to be your existing one.** Strongly recommend a dedicated $3 VPS so the wrapper's resource usage can't affect your other workloads.
-- **`zingo-cli` upgrades:** the wrapper parses zingo's JSON output. Major version changes might shift field names — pin a specific zingo release tag in production and test upgrades on a staging VPS first.
+- **`zingo-cli` upgrades:** the wrapper parses zingo's JSON output. Major version changes might shift field names, so pin a specific zingo release tag in production and test upgrades on a staging VPS first.
 
 ## Why not a full lightwalletd of your own?
 

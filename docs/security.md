@@ -33,11 +33,11 @@ If a malicious site can get a user to sign a SIWZ message *for* `legit-app.com` 
 
 ### Address rotation
 
-A user has no canonical Zcash identity — they can hold thousands of addresses, and shielded users SHOULD rotate. Your application needs to decide whether the user's identity is "this specific address" (simple) or "anyone who can sign with any address in this set" (more complex; typically a one-time linking step at sign-up).
+A user has no canonical Zcash identity: they can hold thousands of addresses, and shielded users SHOULD rotate. Your application needs to decide whether the user's identity is "this specific address" (simple) or "anyone who can sign with any address in this set" (more complex; typically a one-time linking step at sign-up).
 
 ### Sybil
 
-A user can have unlimited addresses. SIWZ does not solve Sybil — pair it with rate limiting, proof-of-payment, or off-chain reputation for use cases where one-account-per-human matters.
+A user can have unlimited addresses. SIWZ does not solve Sybil. Pair it with rate limiting, proof-of-payment, or off-chain reputation for use cases where one-account-per-human matters.
 
 ### Private-key custody
 
@@ -48,7 +48,7 @@ SIWZ never sees a private key, but if the user pastes their seed into a phishing
 - **Always set `NEXTAUTH_SECRET` to a strong random value.** Reused as the SIWZ nonce HMAC key.
 - **Use HTTPS in production.** SIWZ doesn't bind to TLS the way some browser APIs do; a MITM that can intercept the nonce + the signature *and* an existing browser session can replay both. Standard hygiene.
 - **Rate-limit `/api/siwz/nonce`.** It's cheap, but unauthenticated; trivially abusable for DoS amplification.
-- **Set short `expirationSeconds`.** 10 minutes is the default — that's the window in which a stolen signature could be replayed before the nonce expires. Lower if your threat model warrants.
+- **Set short `expirationSeconds`.** 10 minutes is the default. That's the window in which a stolen signature could be replayed before the nonce expires. Lower it if your threat model warrants.
 - **Log verification failures with the error code** (`VERIFIER_UNAVAILABLE`, `EXPIRED`, `DOMAIN_MISMATCH`, …). They're often the first signal of an attack.
 
 ## Threat model: a stolen signature
@@ -56,7 +56,7 @@ SIWZ never sees a private key, but if the user pastes their seed into a phishing
 Suppose an attacker captures a valid `(message, signature, nonceToken)` triple in flight:
 
 - **Same session:** they can replay it once. They will end up signed in as the legitimate user. Mitigation: TLS.
-- **After the user signs in:** the nonceToken is single-use only if the application enforces single-use (the default `verifyNonceToken` does NOT — it only checks the HMAC + TTL). For higher assurance, layer a `nonce_consumed` Bloom filter or a one-shot cache on top.
+- **After the user signs in:** the nonceToken is single-use only if the application enforces single-use (the default `verifyNonceToken` does NOT; it only checks the HMAC and TTL). For higher assurance, layer a `nonce_consumed` Bloom filter or a one-shot cache on top.
 - **After TTL expiry:** the nonceToken fails verification, the signature alone is useless without a fresh nonce.
 
 We chose stateless nonces as the default because they remove the operational burden in serverless deploys. For applications where single-use enforcement is critical, wrap `verifyNonceToken` in a `consumed` check backed by Redis or your DB.

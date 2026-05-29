@@ -38,35 +38,75 @@ if (TOKEN.length < 32) {
 
 const TOKEN_BUF = Buffer.from(TOKEN);
 
+// Background sync keeps wallets fresh on a timer so request handlers serve from
+// an in-memory cache instead of blocking on a per-request --waitsync.
+const BACKGROUND_SYNC = process.env.BACKGROUND_SYNC !== "0";
+const REFRESH_INTERVAL_MS = Number(process.env.BACKGROUND_SYNC_INTERVAL_MS ?? 120_000);
+const RESULT_TTL_MS = Number(process.env.RESULT_TTL_MS ?? 180_000);
+
+// Per-wallet-dir mutex: only one zingo-cli process may touch a dir at a time,
+// since concurrent processes on one wallet corrupt it. Covers both the
+// background loop and any cold request that has to compute.
+const dirLocks = new Map();
+function withDirLock(key, fn) {
+  const prev = dirLocks.get(key) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  dirLocks.set(key, run.catch(() => {}));
+  return run;
+}
+
+// key -> { data, at, refresh }. Requests serve `data`; the loop calls `refresh`.
+const RESULT_CACHE = new Map();
+const cacheInflight = new Map();
+async function cached(key, refresh) {
+  const hit = RESULT_CACHE.get(key);
+  if (hit && Date.now() - hit.at < RESULT_TTL_MS) return hit.data;
+  if (cacheInflight.has(key)) return cacheInflight.get(key);
+  const p = (async () => {
+    try {
+      const data = await refresh();
+      RESULT_CACHE.set(key, { data, at: Date.now(), refresh });
+      return data;
+    } finally {
+      cacheInflight.delete(key);
+    }
+  })();
+  cacheInflight.set(key, p);
+  return p;
+}
+
 // Transient lightwalletd/network errors worth retrying on another endpoint.
 const TRANSIENT_RE = /timeout|deadline|cancell|unavailable|transport error|\bEOF\b|connection|reset|\btls\b/i;
 
 // Run `zingo-cli --server S <baseArgs> --waitsync <cmd>`, cycling the endpoint
 // list and retrying on transient sync errors. baseArgs may be a function so
 // callers can recompute wallet freshness between attempts.
-async function runZingo(baseArgs, cmd, { timeout, maxBuffer }) {
-  let lastErr;
-  const attempts = Math.max(2, LIGHTWALLETD_LIST.length);
-  for (let i = 0; i < attempts; i++) {
-    const server = LIGHTWALLETD_LIST[i % LIGHTWALLETD_LIST.length];
-    const base = typeof baseArgs === "function" ? baseArgs() : baseArgs;
-    try {
-      const { stdout } = await exec(ZINGO, ["--server", server, ...base, "--waitsync", cmd], {
-        encoding: "utf8",
-        maxBuffer,
-        timeout,
-      });
-      const block = extractJsonBlock(stdout);
-      if (block) return JSON.parse(block);
-      lastErr = new Error(`zingo "${cmd}" via ${server} returned no JSON: ${stdout.trim().slice(0, 300) || "(empty)"}`);
-    } catch (err) {
-      lastErr = err;
-      const blob = `${err.message ?? ""}${err.stderr ?? ""}${err.stdout ?? ""}`;
-      if (!TRANSIENT_RE.test(blob)) throw err;
+async function runZingo(baseArgs, cmd, { timeout, maxBuffer, lockKey }) {
+  const attempt = async () => {
+    let lastErr;
+    const attempts = Math.max(2, LIGHTWALLETD_LIST.length);
+    for (let i = 0; i < attempts; i++) {
+      const server = LIGHTWALLETD_LIST[i % LIGHTWALLETD_LIST.length];
+      const base = typeof baseArgs === "function" ? baseArgs() : baseArgs;
+      try {
+        const { stdout } = await exec(ZINGO, ["--server", server, ...base, "--waitsync", cmd], {
+          encoding: "utf8",
+          maxBuffer,
+          timeout,
+        });
+        const block = extractJsonBlock(stdout);
+        if (block) return JSON.parse(block);
+        lastErr = new Error(`zingo "${cmd}" via ${server} returned no JSON: ${stdout.trim().slice(0, 300) || "(empty)"}`);
+      } catch (err) {
+        lastErr = err;
+        const blob = `${err.message ?? ""}${err.stderr ?? ""}${err.stdout ?? ""}`;
+        if (!TRANSIENT_RE.test(blob)) throw err;
+      }
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 2000));
     }
-    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 2000));
-  }
-  throw lastErr;
+    throw lastErr;
+  };
+  return lockKey ? withDirLock(lockKey, attempt) : attempt();
 }
 
 // zingo-cli v0.2+ takes the command as a positional arg; `--waitsync` blocks
@@ -75,6 +115,7 @@ async function zingoCmd(cmd) {
   return runZingo(WALLET_DIR ? ["--data-dir", WALLET_DIR] : [], cmd, {
     timeout: 120_000,
     maxBuffer: 32 * 1024 * 1024,
+    lockKey: WALLET_DIR ?? "service",
   });
 }
 
@@ -158,7 +199,7 @@ async function zingoCmdForUfvk(ufvk, walletDir, cmd, opts = {}) {
     }
     return base;
   };
-  return runZingo(buildArgs, cmd, { timeout: 5 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+  return runZingo(buildArgs, cmd, { timeout: 5 * 60_000, maxBuffer: 64 * 1024 * 1024, lockKey: walletDir });
 }
 
 function walletDirForUfvk(ufvk) {
@@ -306,9 +347,9 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
-        const memos = await listIncomingMemos(address, limit);
+        const all = await cached(`memos:${address}`, () => listIncomingMemos(address, 200));
         res.statusCode = 200;
-        res.end(JSON.stringify({ memos }));
+        res.end(JSON.stringify({ memos: all.slice(0, limit) }));
       } catch (err) {
         console.error(`[lightwallet-rpc] /memos failed:`, err);
         res.statusCode = 502;
@@ -326,7 +367,7 @@ const server = createServer(async (req, res) => {
       }
       const birthday = parsed.birthday != null ? Number(parsed.birthday) : undefined;
       try {
-        const result = await syncUfvkTransactions(ufvk, { birthday });
+        const result = await cached(`tx:${ufvk}`, () => syncUfvkTransactions(ufvk, { birthday }));
         res.statusCode = 200;
         res.end(JSON.stringify(result));
       } catch (err) {
@@ -346,7 +387,7 @@ const server = createServer(async (req, res) => {
       }
       const birthday = parsed.birthday != null ? Number(parsed.birthday) : undefined;
       try {
-        const result = await getUfvkBalance(ufvk, { birthday });
+        const result = await cached(`bal:${ufvk}`, () => getUfvkBalance(ufvk, { birthday }));
         res.statusCode = 200;
         res.end(JSON.stringify(result));
       } catch (err) {
@@ -391,10 +432,28 @@ async function readJsonBody(req, res) {
   }
 }
 
+// Re-run each cached entry's heavy sync on a timer, so request handlers keep
+// hitting a warm cache instead of blocking. Only refreshes wallets that have
+// been requested at least once (the first request per wallet warms the cache).
+async function backgroundRefresh() {
+  for (const [key, entry] of RESULT_CACHE) {
+    try {
+      entry.data = await entry.refresh();
+      entry.at = Date.now();
+    } catch (err) {
+      console.error(`[lightwallet-rpc] bg refresh ${key} failed: ${err.message}`);
+    }
+  }
+}
+
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`[lightwallet-rpc] listening on 127.0.0.1:${PORT}`);
   console.log(`[lightwallet-rpc] front with nginx + certbot for TLS.`);
   console.log(`[lightwallet-rpc] token length: ${TOKEN.length} chars (kept on server only).`);
+  if (BACKGROUND_SYNC) {
+    setInterval(() => void backgroundRefresh(), REFRESH_INTERVAL_MS).unref();
+    console.log(`[lightwallet-rpc] background sync every ${REFRESH_INTERVAL_MS}ms (set BACKGROUND_SYNC=0 to disable)`);
+  }
 });
 
 process.on("SIGTERM", () => server.close(() => process.exit(0)));

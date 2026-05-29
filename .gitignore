@@ -22,3 +22,8 @@ apps/demo/data/*.json
 # Service address private key files — NEVER COMMIT.
 .service-address.local.txt
 **/.service-address.local.txt
+
+# Personal notes / artifacts, not for reviewers.
+docs.zip
+docs/private/
+scripts/push-wrapper.sh

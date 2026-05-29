@@ -21,6 +21,7 @@
   "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsup",
+    "prepublishOnly": "pnpm run build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

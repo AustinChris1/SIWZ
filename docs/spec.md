@@ -32,7 +32,7 @@ Brackets denote optional fields. The blank line separating the address and the k
 | Field | Required | Description |
 |---|---|---|
 | `domain` | yes | DNS authority requesting the sign-in. `example.com` or `example.com:3000`. |
-| `address` | yes | The Zcash address being signed in with: `t1…` (P2PKH), `t3…` (P2SH — invalid for signing), `zs…` (Sapling), `u1…` (Unified). |
+| `address` | yes | The Zcash address being signed in with: `t1…` (P2PKH), `t3…` (P2SH, invalid for signing), `zs…` (Sapling), `u1…` (Unified). |
 | `statement` | no | Human-readable assertion. ASCII, no newlines, ≤ 256 chars recommended. |
 | `URI` | yes | RFC 3986 URI for the resource being signed into. |
 | `Version` | yes | Always `1` for this spec. |
@@ -46,18 +46,18 @@ Brackets denote optional fields. The blank line separating the address and the k
 
 ### 1.2 Differences from EIP-4361
 
-- `Network:` replaces `Chain ID:` — Zcash has no chain id; it has named networks.
+- `Network:` replaces `Chain ID:`. Zcash has no chain id; it has named networks.
 - `address` may be transparent, Sapling, or Unified. The verification algorithm depends on the type.
-- No `Statement:` keyed line — the statement (if any) is a free-form block between the address and the keyed metadata, exactly as in EIP-4361.
+- No `Statement:` keyed line. The statement, if any, is a free-form block between the address and the keyed metadata, exactly as in EIP-4361.
 
 ## 2. Address types and verification
 
 | Type | Prefix (mainnet) | Verification | Spec |
 |---|---|---|---|
 | P2PKH | `t1…` | secp256k1 ECDSA recovery against HASH160(pubkey) | [Bitcoin signmessage adapted](https://github.com/bitcoin/bitcoin) |
-| P2SH | `t3…` | Not supported (script-based, no signing key) | — |
+| P2SH | `t3…` | Not supported (script-based, no signing key) | n/a |
 | Sapling | `zs…` | RedJubjub signature via Sapling Spend authorization | [ZIP 304](https://zips.z.cash/zip-0304) |
-| Orchard | (only as UA receiver) | Not yet specified | — |
+| Orchard | (only as UA receiver) | Not yet specified | n/a |
 | Unified | `u1…` | Sign with one of the contained receivers; display the UA | [ZIP 316](https://zips.z.cash/zip-0316) |
 
 ### 2.1 Transparent (P2PKH) verification algorithm
