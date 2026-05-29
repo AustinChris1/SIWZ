@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import {
   buildZip321,
+  buildZip321Multi,
+  isShieldedAddress,
   parseZip321,
   zecToZatoshi,
   zatoshiToZec,
@@ -9,9 +11,11 @@ import {
 import { deriveMainnetP2pkh, FIXED_PRIV } from "./helpers.js";
 
 let mainnetAddr: string;
+let mainnetAddr2: string;
 
 beforeAll(() => {
   mainnetAddr = deriveMainnetP2pkh(FIXED_PRIV).address;
+  mainnetAddr2 = deriveMainnetP2pkh(new Uint8Array(32).fill(9)).address;
 });
 
 describe("buildZip321 / parseZip321", () => {
@@ -72,6 +76,44 @@ describe("buildZip321 / parseZip321", () => {
     const uri = `zcash:${mainnetAddr}?amount=0.001&custom=hello&label=X`;
     const parsed = parseZip321(uri);
     expect(parsed.unknown).toEqual({ custom: "hello" });
+  });
+});
+
+describe("buildZip321Multi", () => {
+  it("delegates to buildZip321 for a single payment", () => {
+    const uri = buildZip321Multi([{ address: mainnetAddr, amount: "0.5" }]);
+    expect(uri).toBe(buildZip321({ address: mainnetAddr, amount: "0.5" }));
+  });
+
+  it("emits indexed params for multiple payments (empty path)", () => {
+    const uri = buildZip321Multi([
+      { address: mainnetAddr, amount: "0.5" },
+      { address: mainnetAddr2, amount: "0.2" },
+    ]);
+    expect(uri.startsWith("zcash:?")).toBe(true);
+    const params = new URLSearchParams(uri.slice("zcash:?".length));
+    expect(params.get("address")).toBe(mainnetAddr);
+    expect(params.get("amount")).toBe("0.5");
+    expect(params.get("address.1")).toBe(mainnetAddr2);
+    expect(params.get("amount.1")).toBe("0.2");
+  });
+
+  it("rejects an empty payment list", () => {
+    expect(() => buildZip321Multi([])).toThrow(SiwzError);
+  });
+
+  it("rejects a memo aimed at a transparent recipient", () => {
+    expect(() =>
+      buildZip321Multi([
+        { address: mainnetAddr, amount: "0.5" },
+        { address: mainnetAddr2, amount: "0.2", memo: "for the banner" },
+      ]),
+    ).toThrow(/shielded/);
+  });
+
+  it("reports a transparent address as not shielded", () => {
+    expect(isShieldedAddress(mainnetAddr)).toBe(false);
+    expect(isShieldedAddress("not-an-address")).toBe(false);
   });
 });
 

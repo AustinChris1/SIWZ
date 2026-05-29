@@ -32,6 +32,8 @@ export type {
 } from "./types.js";
 export {
   buildZip321,
+  buildZip321Multi,
+  isShieldedAddress,
   parseZip321,
   zecToZatoshi,
   zatoshiToZec,

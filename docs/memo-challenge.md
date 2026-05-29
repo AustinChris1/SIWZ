@@ -83,9 +83,9 @@ Per ZecHub developer guidance and standard light-wallet practice, using a **publ
 
 | Endpoint | Notes |
 |---|---|
-| `https://mainnet.lightwalletd.com:9067` | ECC's canonical; default in our setup script |
-| `https://zec.rocks:443` | Community-run mirror, well-maintained |
-| `https://eu.zec.rocks:443` / `https://na.zec.rocks:443` | Geo mirrors for latency |
+| `https://zec.rocks:443` | Community-run, well-maintained. Default in our setup script |
+| `https://na.zec.rocks:443` / `https://eu.zec.rocks:443` | Geo mirrors for latency; used as automatic failover |
+| `https://mainnet.lightwalletd.com:9067` | ECC's old endpoint. Deprecated and unreachable as of mid-2026 |
 
 The operator of any public lightwalletd you sync against learns *which addresses you scan* (metadata leak) but **cannot decrypt your memos** (no IVK). For production deployments with stronger privacy needs, self-host the lightwalletd → Zebra pair; for hackathon use, public is fine and is what most light wallets in the ecosystem do.
 

@@ -12,11 +12,17 @@
 │  - Auto-poll loop           │         │  - nginx + Let's Encrypt     │
 │  Stateless, free hosting    │         │  ↓ gRPC (raw, not gRPC-Web)  │
 └─────────────────────────────┘         │  Public lightwalletd         │
-                                        │  (mainnet.lightwalletd.com)  │
+                                        │  (zec.rocks + mirrors)       │
                                         └──────────────────────────────┘
 ```
 
-The VPS runs `zingo-cli` in lite mode (syncs only your service address from a public `lightwalletd`, ~50 MB disk) plus a 200-line Node wrapper that exposes `POST /memos` over HTTPS. ZBooks (deployed to Vercel for free) calls that endpoint when polling for new memos.
+The VPS runs `zingo-cli` in lite mode (syncs only your service address from a public `lightwalletd`, ~50 MB disk) plus a small Node wrapper that exposes three POST endpoints over HTTPS:
+
+- `POST /memos`: decrypt incoming memos for the service address (powers memo-challenge **sign-in**).
+- `POST /transactions`: sync a UFVK's transaction history (powers ZBooks **accounting** and payout **reconciliation**).
+- `POST /balance`: a UFVK's total and spendable balance (powers the payout **pre-flight** check and the treasury panel).
+
+All three are view-only. The wrapper reads with viewing keys and never spends. ZBooks (deployed to Vercel for free) calls them when polling for new memos, syncing the books, or pricing a payout run.
 
 **Net result:** users send a shielded payment with a memo from any wallet, the memo gets decrypted server-side using your IVK, and they're signed in. End-to-end shielded sign-in on Zcash mainnet, no full node, no 60GB.
 
@@ -24,20 +30,25 @@ The VPS runs `zingo-cli` in lite mode (syncs only your service address from a pu
 
 A standard "full" shielded verifier stack is **Zebra (or zcashd) full node + lightwalletd + your app**. The Zebra full node needs the entire blockchain locally — about 250–300 GB today and growing. lightwalletd is *just an indexer* in front of Zebra; it can't function alone.
 
-We sidestep that by **not running our own full node at all**. Instead we point `zingo-cli` at a **public lightwalletd** (ECC's `mainnet.lightwalletd.com:9067`, or community-run `zec.rocks` mirrors) — the same backend used by wallets like Zashi and YWallet. Public lightwalletd use is "common and accepted" per ZecHub developer guidance.
+We sidestep that by **not running our own full node at all**. Instead we point `zingo-cli` at a **public lightwalletd**, the same backend used by wallets like Zashi and YWallet. The wrapper passes `--server` explicitly and defaults to `https://zec.rocks:443`, the community-run endpoint that is actively maintained. Public lightwalletd use is common and accepted per ZecHub developer guidance.
 
-The trade-off: the public lightwalletd operator can *see which addresses you sync*, but cannot *decrypt your memos* (they don't hold your IVK). Memos and balances stay private. For production at scale or maximum privacy budget, self-host the full stack on a bigger box; the wrapper code doesn't change.
+The trade-off: the public lightwalletd operator can see which addresses you sync, but cannot decrypt your memos (they do not hold your IVK). Memos and balances stay private. For production at scale or maximum privacy, self-host the full stack on a bigger box; the wrapper code does not change.
 
 ### Lightwalletd endpoint failover
 
-If ECC's `mainnet.lightwalletd.com:9067` is unreachable or slow, swap in a community alternative without losing wallet state. Set `LIGHTWALLETD=<url>` on the systemd unit (or on first install) and restart `siwz-lightwallet`:
+`LIGHTWALLETD` accepts a comma-separated list. The wrapper tries each endpoint in turn and retries the next one on a transient sync error, so a single slow or down server does not break a sync. The default list, and how to override it on the systemd unit:
+
+```ini
+[Service]
+Environment=LIGHTWALLETD=https://zec.rocks:443,https://na.zec.rocks:443,https://eu.zec.rocks:443
+```
 
 | Endpoint | Operator | Notes |
 |---|---|---|
-| `https://mainnet.lightwalletd.com:9067` | Electric Coin Company | Canonical, default in our installer |
-| `https://zec.rocks:443` | Community | Active, well-monitored |
-| `https://eu.zec.rocks:443` | Community | EU geo |
-| `https://na.zec.rocks:443` | Community | North America geo |
+| `https://zec.rocks:443` | Community | Default, actively maintained, fastest in testing |
+| `https://na.zec.rocks:443` | Community | North America mirror |
+| `https://eu.zec.rocks:443` | Community | EU mirror |
+| `https://mainnet.lightwalletd.com:9067` | Electric Coin Company | Deprecated. Unreachable as of mid-2026; do not use |
 
 ## What you need before starting
 
@@ -159,7 +170,7 @@ sudo systemctl start siwz-lightwallet
 
 ## Why not a full lightwalletd of your own?
 
-You can run your own `lightwalletd` instead of using the ECC's public one — adds privacy (the public server learns which addresses you're syncing). But running `lightwalletd` requires a full `zcashd` behind it, which is the 60GB sync we're explicitly avoiding. For the hackathon, the ECC's public lightwalletd is fine. Migrate later when privacy budget warrants.
+You can run your own `lightwalletd` instead of a public one. It adds privacy, since the public server learns which addresses you sync. But running `lightwalletd` requires a full `zcashd` behind it, which is the 60GB sync we are explicitly avoiding. For the hackathon, a public endpoint (zec.rocks) is fine. Migrate later when privacy budget warrants.
 
 ## Cost summary
 

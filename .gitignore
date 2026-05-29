@@ -17,6 +17,7 @@ coverage/
 # Demo app SQLite
 apps/demo/data/*.sqlite
 apps/demo/data/*.db
+apps/demo/data/*.json
 
 # Service address private key files — NEVER COMMIT.
 .service-address.local.txt

@@ -48,16 +48,29 @@ The verifier needs to confirm a tx landed on-chain. The shape of that question d
 interface Explorer {
   getRecentOutputsToAddress(addr, limit): Promise<RecentOutput[]>;
   getRecentMemosToAddress?(addr, limit): Promise<RecentMemo[]>;
+  // ZBooks accounting + payouts:
+  getTransactionsForUfvk?(ufvk, opts): Promise<UfvkSyncResult>;
+  getBalanceForUfvk?(ufvk, opts): Promise<UfvkBalance>;
 }
 ```
 
-Three implementations ship today:
+Implementations that ship today:
 
 - `BlockchairExplorer` — public Zcash API. Transparent only.
 - `ZcashRpcExplorer` — talks to your zcashd/zaino/zallet daemon via HTTP or `zcash-cli`. Both transparent and shielded.
+- `LightwalletExplorer`: HTTP client for the `zingo-cli` wrapper; satisfies the UFVK sync and balance methods that ZBooks accounting and payouts use.
 - `MockExplorer` — in-memory, for DEMO mode and tests.
 
-Adding a fourth (e.g. a `LightwalletExplorer` that uses `zingo-cli` lite mode) is a few dozen lines because the interface is small. See `docs/winning-deployment.md` for the lite-wallet deployment recipe.
+The interface is small, so adding a backend is a few dozen lines. See `docs/winning-deployment.md` for the lite-wallet deployment recipe.
+
+## ZBooks payouts: non-custodial, on top of the viewing key
+
+ZBooks reuses the same view-only UFVK that powers its accounting to *pay*
+contributors, without ever holding a spending key. It builds a single
+multi-recipient ZIP 321 URI for a payout run; the treasurer signs in their own
+wallet; ZBooks then watches the treasury UFVK and reconciles the outgoing tx back
+to each payout line. Custodial sending was considered and rejected; PCZT
+one-click signing is roadmap. Full design in [`zbooks-payouts.md`](./zbooks-payouts.md).
 
 ## Stateless nonces
 

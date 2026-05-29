@@ -12,7 +12,7 @@ export const ZCASH_BLOCKS = {
    * birthday when the user doesn't supply one. Bump occasionally as
    * the chain grows — every block before this is dead weight in scan time.
    */
-  SAFE_RECENT_BIRTHDAY: 2_800_000,
+  SAFE_RECENT_BIRTHDAY: 3_300_000,
 } as const;
 
 export type ZcashBlockName = keyof typeof ZCASH_BLOCKS;

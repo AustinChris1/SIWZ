@@ -4,8 +4,8 @@ import type { Network } from "./types.js";
 
 /**
  * ZIP 321 Payment Request URI format (https://zips.z.cash/zip-0321).
- * Single-recipient only. Multi-recipient (`address.1`, `address.2`, ...) is
- * in the spec but not used by SIWZ.
+ * `buildZip321` is single-recipient; `buildZip321Multi` emits the indexed
+ * (`address.1`, `address.2`, ...) multi-payment form used for batch payouts.
  */
 
 export interface ZIP321Request {
@@ -42,6 +42,63 @@ function base64urlDecode(s: string): Uint8Array {
     return out;
   }
   return new Uint8Array(Buffer.from(b64, "base64"));
+}
+
+/** True for addresses that can receive an encrypted memo (Sapling/Orchard/Unified). */
+export function isShieldedAddress(address: string): boolean {
+  try {
+    const t = parseAddress(address).type;
+    return t === "sapling" || t === "orchard" || t === "unified";
+  } catch {
+    return false;
+  }
+}
+
+// Multi-recipient ZIP 321 (one tx, many payments): payment 0 is unindexed, the
+// rest use the `.N` paramindex. Throws on a memo to a transparent recipient.
+export function buildZip321Multi(payments: ZIP321Request[]): string {
+  if (payments.length === 0) {
+    throw new SiwzError("INVALID_MESSAGE", "ZIP 321: at least one payment required");
+  }
+  if (payments.length === 1) return buildZip321(payments[0]!);
+  if (payments.length > 9999) {
+    throw new SiwzError("INVALID_MESSAGE", "ZIP 321: at most 9999 payments per URI");
+  }
+
+  const params = new URLSearchParams();
+  payments.forEach((req, i) => {
+    if (!req.address) {
+      throw new SiwzError("INVALID_ADDRESS", `ZIP 321: payment ${i} has no address`);
+    }
+    let parsed;
+    try {
+      parsed = parseAddress(req.address);
+    } catch (err) {
+      throw new SiwzError("INVALID_ADDRESS", `ZIP 321: payment ${i}: ${(err as Error).message}`);
+    }
+    const sfx = i === 0 ? "" : `.${i}`;
+    params.set(`address${sfx}`, req.address);
+    if (req.amount !== undefined) params.set(`amount${sfx}`, normaliseAmount(req.amount));
+    if (req.memo !== undefined) {
+      const shielded = parsed.type === "sapling" || parsed.type === "orchard" || parsed.type === "unified";
+      if (!shielded) {
+        throw new SiwzError(
+          "INVALID_MESSAGE",
+          `ZIP 321: payment ${i}: memo is only valid for shielded recipients`,
+        );
+      }
+      const memoBytes = TEXT_ENCODER.encode(req.memo);
+      if (memoBytes.length > 512) {
+        throw new SiwzError("INVALID_MESSAGE", `ZIP 321: payment ${i}: memo > 512 bytes`);
+      }
+      params.set(`memo${sfx}`, base64urlEncode(memoBytes));
+    }
+    if (req.label !== undefined) params.set(`label${sfx}`, req.label);
+    if (req.message !== undefined) params.set(`message${sfx}`, req.message);
+  });
+
+  // Empty path: payment 0's address rides in the query string. Valid ZIP 321.
+  return `zcash:?${params.toString()}`;
 }
 
 /** Build a ZIP 321 URI. Throws SiwzError on invalid input. */

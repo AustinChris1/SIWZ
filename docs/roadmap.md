@@ -10,7 +10,8 @@ Where this is going after the hackathon.
 - ✅ Three sign-in flows: signmessage paste, memo-challenge (ZIP 321), MetaMask Zcash Snap.
 - ✅ Two backends for shielded memo decryption: full zcashd RPC, light wallet via `zingo-cli` wrapper.
 - ✅ Two reference apps: ZBooks (full production-shape), example-comments (~150-line minimal).
-- ✅ Three end-to-end test scripts covering paste, memo (transparent + shielded), Snap.
+- ✅ ZBooks payouts: non-custodial batch contributor payments via multi-recipient ZIP 321, treasury pre-flight balance check, and auto-reconciliation against the viewing key. See [zbooks-payouts.md](./zbooks-payouts.md).
+- ✅ Four end-to-end test scripts covering paste, memo (transparent + shielded), Snap, and payouts (`e2e-payouts.mjs`).
 - ✅ Deployment recipe for a $3/mo VPS doing shielded sign-in on real mainnet.
 
 ## v0.2 — wallet UX
@@ -19,6 +20,7 @@ Where this is going after the hackathon.
   - Action: propose a ZIP extension (or document the convention if one exists), submit PRs to Zashi / YWallet / Zingo to honor it.
 - **Native browser intent handler.** Most desktop wallets aren't registered as the OS handler for `zcash:` URIs, so clicking the deep-link copy-pastes the URI instead of opening the wallet. PR to Zingo desktop and YWallet desktop to add the OS protocol registration on install.
 - **Wallet-side "this is a sign-in" indicator.** When a `zcash:` URI carries a recognized SIWZ memo prefix (`SIWZ:…`), wallets should label the confirm screen differently ("Sign in to {dApp}") so users know they're authenticating, not paying for a thing.
+- **ZBooks PCZT one-click payouts.** Today a payout run is a multi-recipient ZIP 321 URI the treasurer scans in a multi-recipient wallet (YWallet/Zingo). When the ChainSafe snap's `signPczt` (or a published in-browser wallet lib) is usable, ZBooks builds the transaction itself from the viewing key and the treasurer just approves, removing the per-recipient wallet-support caveat. Still non-custodial: ZBooks never holds the spending key.
 
 ## v0.3 — ZIP 304 signed messages
 

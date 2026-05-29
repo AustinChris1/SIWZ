@@ -13,6 +13,10 @@ import { ZCASH_BLOCKS } from "./zcash-blocks.mjs";
 const PORT = parseInt(process.env.PORT ?? "18232", 10);
 const TOKEN = process.env.LIGHTWALLET_RPC_TOKEN;
 const ZINGO = process.env.ZINGO_CLI_PATH ?? "zingo-cli";
+// lightwalletd endpoints (comma-separated). zingo cycles them on transient
+// errors; without --server it uses its built-in (often dead) default.
+const LIGHTWALLETD_LIST = (process.env.LIGHTWALLETD ?? "https://zec.rocks:443,https://na.zec.rocks:443,https://eu.zec.rocks:443")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 const WALLET_DIR = process.env.ZINGO_WALLET_DIR;
 const UFVK_WALLETS_DIR = process.env.ZINGO_UFVK_WALLETS_DIR ?? join(homedir(), ".zingo-ufvks");
 const exec = promisify(execFile);
@@ -34,21 +38,44 @@ if (TOKEN.length < 32) {
 
 const TOKEN_BUF = Buffer.from(TOKEN);
 
-// zingo-cli v0.2+ takes the command as a positional arg (the old `--command`
-// flag was removed). `--waitsync` blocks until the startup sync catches up.
+// Transient lightwalletd/network errors worth retrying on another endpoint.
+const TRANSIENT_RE = /timeout|deadline|cancell|unavailable|transport error|\bEOF\b|connection|reset|\btls\b/i;
+
+// Run `zingo-cli --server S <baseArgs> --waitsync <cmd>`, cycling the endpoint
+// list and retrying on transient sync errors. baseArgs may be a function so
+// callers can recompute wallet freshness between attempts.
+async function runZingo(baseArgs, cmd, { timeout, maxBuffer }) {
+  let lastErr;
+  const attempts = Math.max(2, LIGHTWALLETD_LIST.length);
+  for (let i = 0; i < attempts; i++) {
+    const server = LIGHTWALLETD_LIST[i % LIGHTWALLETD_LIST.length];
+    const base = typeof baseArgs === "function" ? baseArgs() : baseArgs;
+    try {
+      const { stdout } = await exec(ZINGO, ["--server", server, ...base, "--waitsync", cmd], {
+        encoding: "utf8",
+        maxBuffer,
+        timeout,
+      });
+      const block = extractJsonBlock(stdout);
+      if (block) return JSON.parse(block);
+      lastErr = new Error(`zingo "${cmd}" via ${server} returned no JSON: ${stdout.trim().slice(0, 300) || "(empty)"}`);
+    } catch (err) {
+      lastErr = err;
+      const blob = `${err.message ?? ""}${err.stderr ?? ""}${err.stdout ?? ""}`;
+      if (!TRANSIENT_RE.test(blob)) throw err;
+    }
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw lastErr;
+}
+
+// zingo-cli v0.2+ takes the command as a positional arg; `--waitsync` blocks
+// until the startup sync catches up.
 async function zingoCmd(cmd) {
-  const baseArgs = WALLET_DIR ? ["--data-dir", WALLET_DIR] : [];
-  const args = [...baseArgs, "--waitsync", cmd];
-  const { stdout } = await exec(ZINGO, args, {
-    encoding: "utf8",
-    maxBuffer: 32 * 1024 * 1024,
+  return runZingo(WALLET_DIR ? ["--data-dir", WALLET_DIR] : [], cmd, {
     timeout: 120_000,
+    maxBuffer: 32 * 1024 * 1024,
   });
-  // zingo-cli interleaves JSON with status lines like "Launching sync task..."
-  // and "Zingo CLI quit successfully.", so walk the string to extract the block.
-  const block = extractJsonBlock(stdout);
-  if (!block) throw new Error(`zingo returned no JSON in output: ${stdout.slice(0, 400)}`);
-  return JSON.parse(block);
 }
 
 function extractJsonBlock(s) {
@@ -121,26 +148,17 @@ const DEFAULT_WALLET_BIRTHDAY = ZCASH_BLOCKS.SAFE_RECENT_BIRTHDAY;
 const ufvkSyncInFlight = new Map();
 
 async function zingoCmdForUfvk(ufvk, walletDir, cmd, opts = {}) {
-  const isFresh = !existsSync(join(walletDir, "zingo-wallet.dat"));
-  const baseArgs = ["--data-dir", walletDir];
-  if (isFresh) {
-    // zingo-cli v0.2 `--viewkey` requires `--birthday`, or it errors out.
-    const birthday = Number.isFinite(opts.birthday) ? Math.max(0, Math.floor(opts.birthday)) : DEFAULT_WALLET_BIRTHDAY;
-    baseArgs.push("--viewkey", ufvk, "--birthday", String(birthday));
-  }
-  const args = [...baseArgs, "--waitsync", cmd];
-  const { stdout, stderr } = await exec(ZINGO, args, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 5 * 60_000,
-  });
-  const block = extractJsonBlock(stdout);
-  if (!block) {
-    const stdoutHint = stdout.trim().slice(0, 400) || "(empty)";
-    const stderrHint = (stderr || "").trim().slice(0, 400) || "(empty)";
-    throw new Error(`zingo "${cmd}" returned no JSON. stdout=${stdoutHint} stderr=${stderrHint}`);
-  }
-  return JSON.parse(block);
+  // Recomputed each attempt: a failed first sync may still persist the wallet,
+  // after which re-passing --viewkey errors, so only pass it while fresh.
+  const buildArgs = () => {
+    const base = ["--data-dir", walletDir];
+    if (!existsSync(join(walletDir, "zingo-wallet.dat"))) {
+      const birthday = Number.isFinite(opts.birthday) ? Math.max(0, Math.floor(opts.birthday)) : DEFAULT_WALLET_BIRTHDAY;
+      base.push("--viewkey", ufvk, "--birthday", String(birthday));
+    }
+    return base;
+  };
+  return runZingo(buildArgs, cmd, { timeout: 5 * 60_000, maxBuffer: 64 * 1024 * 1024 });
 }
 
 function walletDirForUfvk(ufvk) {
@@ -203,6 +221,40 @@ async function _syncUfvkTransactionsImpl(ufvk, opts = {}) {
   };
 }
 
+// zingo-cli `balance` field names drift across versions; sum the per-pool
+// totals (orchard/sapling/transparent) and spendable_* defensively.
+async function getUfvkBalance(ufvk, opts = {}) {
+  const dir = walletDirForUfvk(ufvk);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const data = await zingoCmdForUfvk(ufvk, dir, "balance", opts);
+
+  const num = (v) => {
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  // zingo reports zatoshi integers for these fields.
+  const totalKeys = ["orchard_balance", "sapling_balance", "transparent_balance"];
+  const spendableKeys = [
+    "spendable_orchard_balance",
+    "spendable_sapling_balance",
+    // transparent is spendable once confirmed; zingo lacks a spendable_transparent field.
+    "transparent_balance",
+  ];
+  let total = 0;
+  let spendable = 0;
+  for (const k of totalKeys) total += num(data?.[k]);
+  for (const k of spendableKeys) spendable += num(data?.[k]);
+  // Guard against versions that only expose spendable.
+  if (total === 0 && spendable > 0) total = spendable;
+
+  return {
+    totalZatoshi: String(Math.round(total)),
+    spendableZatoshi: String(Math.round(spendable)),
+    unconfirmedZatoshi: String(Math.max(0, Math.round(total - spendable))),
+    syncedAt: new Date().toISOString(),
+  };
+}
+
 function pickMemo(t, address) {
   // zingo-cli v0.2 puts memos in `{ memos: [string, ...] }`. Older builds
   // and per-pool note shapes are checked as fallbacks.
@@ -236,7 +288,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && (req.url === "/memos" || req.url === "/transactions")) {
+  if (req.method === "POST" && (req.url === "/memos" || req.url === "/transactions" || req.url === "/balance")) {
     if (!checkAuth(req)) {
       res.statusCode = 401;
       res.end(JSON.stringify({ error: "unauthorized" }));
@@ -281,6 +333,26 @@ const server = createServer(async (req, res) => {
         console.error(`[lightwallet-rpc] /transactions failed:`, err);
         res.statusCode = 502;
         res.end(JSON.stringify({ error: `sync failed: ${err.message}` }));
+      }
+      return;
+    }
+
+    if (req.url === "/balance") {
+      const ufvk = typeof parsed.ufvk === "string" ? parsed.ufvk.trim() : "";
+      if (!ufvk || !(ufvk.startsWith("uview") || ufvk.startsWith("uviewtest"))) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: "ufvk required, must start with uview... or uviewtest..." }));
+        return;
+      }
+      const birthday = parsed.birthday != null ? Number(parsed.birthday) : undefined;
+      try {
+        const result = await getUfvkBalance(ufvk, { birthday });
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error(`[lightwallet-rpc] /balance failed:`, err);
+        res.statusCode = 502;
+        res.end(JSON.stringify({ error: `balance failed: ${err.message}` }));
       }
       return;
     }
