@@ -198,7 +198,7 @@ notes for the full story.
 
 ## Offering more than one, or a custom UI
 
-`apps/zecwall` shows all three behind tabs in about 150 lines. If you
+`apps/zecwall` shows all three behind tabs in a few small files. If you
 want your own UI for the signed-message and snap flows, use the headless
 `useSiwz()` hook from `@siwz/react` instead of `SignInWithZcash`; it returns the
 state machine (`status`, `buildChallenge`, `submitSignature`, `trySnapSignIn`,

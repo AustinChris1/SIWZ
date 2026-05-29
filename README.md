@@ -19,7 +19,7 @@ npm i @siwz/react @siwz/next-auth @siwz/core
 ## Minimal example — memo-challenge
 
 ```tsx
-import { MemoSignIn } from "@/components/MemoSignIn"; // see apps/demo for ~150 lines
+import { MemoSignIn } from "@/components/MemoSignIn"; // see apps/demo for the reference implementation
 
 <MemoSignIn />
 ```

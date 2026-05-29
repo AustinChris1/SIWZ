@@ -24,8 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </header>
             {children}
             <footer className="text-xs opacity-60 border-t pt-4 mt-8">
-              This app is ~150 lines of integration code. The auth comes from the
-              shared <code className="font-mono">@siwz/*</code> packages — same ones ZBooks uses.
+              A small SIWZ reference integration. The auth comes from the
+              shared <code className="font-mono">@siwz/*</code> packages, the same ones ZBooks uses.
               Two apps, one primitive.
             </footer>
           </main>

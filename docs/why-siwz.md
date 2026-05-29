@@ -71,7 +71,7 @@ Three npm packages built around the design above:
 Two reference apps built on top:
 
 - **ZBooks**: accounting for ZEC teams. Real SIWZ in real production-shaped code.
-- **ZecWall**: a Zcash-gated comments wall in ~150 lines. Proves SIWZ is a primitive, not a framework.
+- **ZecWall**: a Zcash-gated comments wall, the minimal SIWZ reference integration. Proves SIWZ is a primitive, not a framework.
 
 A clear migration path to even more Zcash-native primitives as they land:
 
