@@ -1,6 +1,10 @@
-# `@siwz/next-auth`
+# @siwz/next-auth
 
-NextAuth.js v4 / Auth.js v5 credentials provider for Sign in with Zcash. Plus stateless signed-nonce helpers.
+[![npm](https://img.shields.io/npm/v/@siwz/next-auth.svg)](https://www.npmjs.com/package/@siwz/next-auth)
+
+NextAuth.js v4 / Auth.js v5 credentials provider for **Sign in with Zcash**, plus stateless HMAC nonce helpers for serverless backends.
+
+Docs and live demos: <https://siwz.vercel.app>
 
 ## Install
 
@@ -8,7 +12,9 @@ NextAuth.js v4 / Auth.js v5 credentials provider for Sign in with Zcash. Plus st
 npm i @siwz/next-auth @siwz/core next-auth
 ```
 
-## Wire up NextAuth (v4 / app router)
+Peer-deps: `next-auth >= 4`.
+
+## Wire up NextAuth (v4 / App Router)
 
 ```ts
 // app/api/auth/[...nextauth]/route.ts
@@ -18,7 +24,7 @@ import { SiwzProvider } from "@siwz/next-auth";
 
 const siwz = SiwzProvider({
   expectedDomain: "myapp.com",          // MUST match what the browser sees
-  secret: process.env.NEXTAUTH_SECRET!, // reused to sign nonce tokens
+  secret: process.env.NEXTAUTH_SECRET!, // also signs the nonce tokens
 });
 
 const handler = NextAuth({
@@ -45,6 +51,8 @@ export { handler as GET, handler as POST };
 
 ## Nonce endpoint
 
+The provider needs a server-issued nonce per sign-in attempt. `issueNonce` and `verifyNonceToken` are stateless: they HMAC-sign `(nonce, expiry)` instead of storing anything.
+
 ```ts
 // app/api/siwz/nonce/route.ts
 import { NextResponse } from "next/server";
@@ -65,25 +73,61 @@ export async function GET() {
 }
 ```
 
-## Why stateless nonces?
+The `/nonce` subpath import is the small slice you can use without pulling in the rest of the provider. Useful if your nonce route runs in an edge runtime or you want to issue nonces from a separate service.
 
-A naive nonce implementation stores `nonce → expiry` in memory or a database. That works, but is fiddly across multiple Node instances and adds a stateful component to an otherwise stateless flow.
+## Why stateless nonces
+
+A naive nonce implementation stores `nonce -> expiry` in memory or a database. That works but adds a stateful component to an otherwise stateless flow.
 
 `issueNonce` / `verifyNonceToken` use HMAC-SHA256 over `(nonce, expiry)` instead:
 
-- Any backend instance with the same `NEXTAUTH_SECRET` can verify a token issued by any other.
+- Any backend instance with the same `NEXTAUTH_SECRET` verifies a token issued by any other.
 - Replay-prevention guarantee is the same: a stolen but unexpired token only authenticates whoever already signed for that specific nonce.
-- Constant-time comparison thwarts timing oracles.
+- Constant-time comparison prevents timing oracles.
 
 ## Sapling (z-addr) sign-in
 
-Pass `saplingVerifier` to `SiwzProvider` once you have a [ZIP 304](https://zips.z.cash/zip-0304) verifier wired up. See [docs/sapling-wasm.md](../../docs/sapling-wasm.md).
+Pass `saplingVerifier` to `SiwzProvider` once you have a [ZIP 304](https://zips.z.cash/zip-0304) verifier wired up (typically a WASM wrapper around `librustzcash`). The provider then accepts z-addr signed messages automatically.
+
+```ts
+SiwzProvider({
+  expectedDomain: "myapp.com",
+  secret: process.env.NEXTAUTH_SECRET!,
+  saplingVerifier: async ({ message, signature, address }) => {
+    // hand off to your WASM verifier
+    return verifyZip304(message, signature, address);
+  },
+});
+```
 
 ## Auth.js v5
 
-The same `SiwzProvider(...)` config object is consumed by Auth.js v5's `Credentials(...)` provider. The only thing that changes is the import:
+The same `SiwzProvider(...)` config object is consumed by Auth.js v5's `Credentials(...)` provider. Only the import line changes:
 
 ```ts
 import Credentials from "next-auth/providers/credentials";
-// ... rest is identical
+const handler = NextAuth({ providers: [Credentials(siwz as any)], /* ... */ });
 ```
+
+## API surface
+
+```ts
+SiwzProvider(opts)
+  // opts: SiwzProviderOptions = { expectedDomain, secret, id?, saplingVerifier? }
+
+issueNonce({ secret, ttlSeconds? })            // -> { nonce, token, expiresAt }
+verifyNonceToken(token, { secret })            // -> { ok: true, nonce } | { ok: false, error }
+
+// Types
+type SiwzProviderOptions, SiwzCredentials, SiwzUser
+type NonceTokenOptions, IssuedNonce, VerifyNonceResult
+```
+
+## Related packages
+
+- [`@siwz/core`](https://www.npmjs.com/package/@siwz/core): protocol primitives.
+- [`@siwz/react`](https://www.npmjs.com/package/@siwz/react): drop-in components and Snap helpers.
+
+## License
+
+MIT

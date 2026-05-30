@@ -122,7 +122,7 @@ export default function Home() {
               Message format, ZIP 321 builder, address parsing, memo-challenge, and pure-TS verification.
             </Card>
             <Card icon={<ComponentIcon />} title="@siwz/react">
-              {"<SignInWithZcash />, <MemoSignIn />, the useSiwz() hook, QR and polling, Snap detection."}
+              {"<SignInWithZcash />, the useSiwz() hook, and MetaMask Snap helpers."}
             </Card>
             <Card icon={<PlugIcon />} title="@siwz/next-auth">
               A NextAuth credentials provider plus stateless HMAC nonce tokens for serverless.
