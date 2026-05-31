@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-The original SIWZ proposal mirrored [SIWE](https://eips.ethereum.org/EIPS/eip-4361): sign a challenge message with your address. That works in theory but breaks in practice: most Zcash wallets don't expose `signmessage`. `zcash-cli` does; YWallet does; Zingo / Zodl / Zashi / eZcash / Zenith / Brave / Trust / Exodus / Coinomi / SafePal / Leodex are variously missing or buried.
+The original SIWZ proposal mirrored [SIWE](https://eips.ethereum.org/EIPS/eip-4361): sign a challenge message with your address. That works in theory but breaks in practice: most Zcash wallets don't expose `signmessage`. `zcash-cli` does; YWallet does; Zingo / Zodl / eZcash / Zenith / Brave / Trust / Exodus / Coinomi / SafePal / Leodex are variously missing or buried.
 
 Worse: Zcash is a shielded-first chain, and asking users to sign with a transparent t-addr makes SIWZ-classic the *anti-Zcash* sign-in pattern. We're authenticating with the legacy path, not the privacy-preserving one.
 
@@ -13,7 +13,7 @@ The memo-challenge approach pivots to what Zcash actually does well: shielded tr
 ## How it works
 
 1. **App issues a challenge.** Server generates a unique-amount challenge encoded in a [ZIP 321](https://zips.z.cash/zip-0321) payment-request URI. The amount carries entropy in its least-significant zatoshi digits, random per attempt.
-2. **App displays a QR + `zcash:` deep link.** Wallets that support ZIP 321 (Zashi, YWallet, Zingo, eZcash, Zenith, …) open with the transaction pre-filled when the user scans/clicks.
+2. **App displays a QR + `zcash:` deep link.** Wallets that support ZIP 321 (Zodl, YWallet, Zingo, eZcash, Zenith, …) open with the transaction pre-filled when the user scans/clicks.
 3. **User sends the payment** from whichever wallet they want to authenticate as. The send is a regular shielded payment, with no special UI needed in the wallet.
 4. **App verifies the tx.** The server (or the user, via paste-txid) looks up the tx on a public block explorer and confirms one of its transparent outputs pays the expected `(serviceAddress, amount)` pair. A match means the user is authenticated.
 

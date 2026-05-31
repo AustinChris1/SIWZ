@@ -13,7 +13,7 @@ This page covers both per wallet.
 
 The app generates a `zcash:<address>?amount=…&memo=…` URI and shows it as a QR code. Every modern Zcash wallet treats `zcash:` URIs as payment requests and pre-fills the send screen.
 
-### Zashi (mobile, iOS + Android)
+### Zodl (mobile, iOS + Android)
 
 1. Tap the **Receive/Send** tab (bottom).
 2. Tap the QR-scanner icon.
@@ -45,7 +45,7 @@ YWallet has the best Unified Address support of the bunch. If the SIWZ service a
 2. Scan the SIWZ QR.
 3. Confirm the prefilled tx.
 
-### Zashi-CLI / zcash-cli
+### Zodl-CLI / zcash-cli
 
 Two options:
 
@@ -122,7 +122,7 @@ What's actually possible with each wallet today, ordered by SIWZ-readiness:
 
 | Wallet | Memo-challenge (ZIP 321) | Signmessage | Snap | UA receiver |
 |---|---|---|---|---|
-| Zashi | Yes | No | No | Yes |
+| Zodl | Yes | No | No | Yes |
 | YWallet | Yes | Yes | No | Yes |
 | Zingo | Yes | Partial (build-dependent) | No | Yes |
 | Zodl | Yes | No | No | Yes |

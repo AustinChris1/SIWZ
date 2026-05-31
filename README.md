@@ -4,7 +4,7 @@
 
 | # | Flow | Wallet support | Speed | Trade-off |
 |---|---|---|---|---|
-| 1 | **Memo-challenge** — send a tiny shielded payment with a unique amount, app verifies on-chain ([ZIP 321](https://zips.z.cash/zip-0321) deep link + QR). Like zcashnames. | **All shielded wallets** (Zashi, Zingo, YWallet, Zodl, eZcash, Zenith, Dizzy, Cake, Unstoppable, Brave Snap, …) | ~75s (block confirm) | Proves spend-authority over some ZEC, not specific-key ownership |
+| 1 | **Memo-challenge** — send a tiny shielded payment with a unique amount, app verifies on-chain ([ZIP 321](https://zips.z.cash/zip-0321) deep link + QR). Like zcashnames. | **All shielded wallets** (Zodl, Zingo, YWallet, eZcash, Zenith, Dizzy, Cake, Unstoppable, Brave Snap, …) | ~75s (block confirm) | Proves spend-authority over some ZEC, not specific-key ownership |
 | 2 | **Signed-message paste** — sign a SIWZ challenge with your wallet's `signmessage`, paste the signature. | `zcash-cli`, YWallet | Instant | Most wallets don't expose `signmessage` |
 | 3 | **MetaMask + Zcash Snap** — Snap permission grant as identity (no challenge signature). | MetaMask + ChainSafe WebZjs Snap | Instant | Snap currently allowlists ChainSafe's own dApp only |
 

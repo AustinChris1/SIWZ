@@ -30,7 +30,7 @@ All three are view-only. The wrapper reads with viewing keys and never spends. Z
 
 A standard "full" shielded verifier stack is **Zebra (or zcashd) full node + lightwalletd + your app**. The Zebra full node needs the entire blockchain locally, about 250 to 300 GB today and growing. lightwalletd is *just an indexer* in front of Zebra; it can't function alone.
 
-We sidestep that by **not running our own full node at all**. Instead we point `zingo-cli` at a **public lightwalletd**, the same backend used by wallets like Zashi and YWallet. The wrapper passes `--server` explicitly and defaults to `https://zec.rocks:443`, the community-run endpoint that is actively maintained. Public lightwalletd use is common and accepted per ZecHub developer guidance.
+We sidestep that by **not running our own full node at all**. Instead we point `zingo-cli` at a **public lightwalletd**, the same backend used by wallets like Zodl and YWallet. The wrapper passes `--server` explicitly and defaults to `https://zec.rocks:443`, the community-run endpoint that is actively maintained. Public lightwalletd use is common and accepted per ZecHub developer guidance.
 
 The trade-off: the public lightwalletd operator can see which addresses you sync, but cannot decrypt your memos (they do not hold your IVK). Memos and balances stay private. For production at scale or maximum privacy, self-host the full stack on a bigger box; the wrapper code does not change.
 
@@ -111,7 +111,7 @@ Redeploy. The `getShieldedExplorer()` dispatcher in [`apps/demo/src/lib/explorer
 1. User opens ZBooks at `https://zbooks.your-domain.com`.
 2. User clicks "Sign in with Zcash".
 3. ZBooks issues a memo-challenge. UI renders a QR encoding `zcash:zs1...?amount=0.00001&memo=U0lXWjpAYmNkZWY...` (base64url of `SIWZ:abcdef…`).
-4. User scans the QR with Zashi / YWallet / Zingo. Wallet opens with the tx pre-filled.
+4. User scans the QR with Zodl / YWallet / Zingo. Wallet opens with the tx pre-filled.
 5. User confirms. The shielded tx broadcasts.
 6. Usually within 5 to 15 seconds, `lightwalletd` includes the block. `zingo-cli` on the VPS decrypts the note with your IVK. The memo `SIWZ:abcdef…` becomes visible to `zingo-cli list`.
 7. ZBooks's polling loop hits `https://rpc.your-domain.com/memos`. The wrapper shells out to `zingo-cli list`, finds the matching memo, returns it.

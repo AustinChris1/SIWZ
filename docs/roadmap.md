@@ -17,7 +17,7 @@ Where this is going after the hackathon.
 ## v0.2: wallet UX
 
 - **`zcash:` URI return-callback support.** Wallets currently send the user to confirm the tx and... leave them there. If wallets honored `?callback=https://app.example.com/done`, the sign-in flow becomes one continuous interaction with no manual tab-switch.
-  - Action: propose a ZIP extension (or document the convention if one exists), submit PRs to Zashi / YWallet / Zingo to honor it.
+  - Action: propose a ZIP extension (or document the convention if one exists), submit PRs to Zodl / YWallet / Zingo to honor it.
 - **Native browser intent handler.** Most desktop wallets aren't registered as the OS handler for `zcash:` URIs, so clicking the deep-link copy-pastes the URI instead of opening the wallet. PR to Zingo desktop and YWallet desktop to add the OS protocol registration on install.
 - **Wallet-side "this is a sign-in" indicator.** When a `zcash:` URI carries a recognized SIWZ memo prefix (`SIWZ:…`), wallets should label the confirm screen differently ("Sign in to {dApp}") so users know they're authenticating, not paying for a thing.
 - **ZBooks PCZT one-click payouts.** Today a payout run is a multi-recipient ZIP 321 URI the treasurer scans in a multi-recipient wallet (YWallet/Zingo). When the ChainSafe snap's `signPczt` (or a published in-browser wallet lib) is usable, ZBooks builds the transaction itself from the viewing key and the treasurer just approves, removing the per-recipient wallet-support caveat. Still non-custodial: ZBooks never holds the spending key.

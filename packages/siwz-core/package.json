@@ -1,6 +1,6 @@
 {
   "name": "@siwz/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Sign in with Zcash — core protocol: message format, address parsing, signature verification",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",

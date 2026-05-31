@@ -60,3 +60,36 @@ Suppose an attacker captures a valid `(message, signature, nonceToken)` triple i
 - **After TTL expiry:** the nonceToken fails verification, the signature alone is useless without a fresh nonce.
 
 We chose stateless nonces as the default because they remove the operational burden in serverless deploys. For applications where single-use enforcement is critical, wrap `verifyNonceToken` in a `consumed` check backed by Redis or your DB.
+
+## ZBooks application-layer hardening
+
+These are the protections layered on top of SIWZ in the ZBooks reference app (`apps/demo`). They are application choices, not part of the SIWZ protocol, and are written here so other integrators can copy or adapt the pattern.
+
+### UFVK encryption at rest
+
+UFVKs are persisted in Turso under AES-256-GCM with a key derived from `NEXTAUTH_SECRET` via HKDF-SHA256. Stored rows look like `enc:v1:<iv>.<tag>.<ciphertext>`, base64url-encoded. The plaintext UFVK never touches the DB. A leaked Turso auth token alone no longer leaks the team's complete shielded transaction history; both the DB token AND `NEXTAUTH_SECRET` have to be compromised before plaintext UFVKs come back.
+
+- Implementation: `apps/demo/src/lib/crypto-at-rest.ts`.
+- Idempotent migration: on first DB access after the upgrade, any legacy plaintext UFVKs are re-written as ciphertexts (`apps/demo/src/lib/db.ts`, `migrateUfvksToEncrypted`).
+- Reads decrypt transparently in `toUfvk`; callers see plaintext.
+- Caveat: rotating `NEXTAUTH_SECRET` invalidates all stored ciphertexts. Plan a re-key step if you ever rotate that secret.
+
+### Key ownership on mutation
+
+A treasurer can manage their own UFVK rows but cannot rename or delete a row whose `owner` does not match their session address. Admins keep the wider authority. Enforced in `apps/demo/src/app/api/keys/[id]/route.ts` via `authorizeKeyMutation`.
+
+### Rate limits on the memo endpoints
+
+`/api/auth/memo/issue` (20/min/IP) and `/api/auth/memo/poll` (90/min/IP) carry an in-process sliding-window limiter from `apps/demo/src/lib/rate-limit.ts`. State is per-instance, so a determined distributed attacker can multiply by the hot-instance count; treat this as a hardening, not a fortress. For a real fortress, back the limiter with Turso or Redis.
+
+### Reconcile match strictness
+
+Auto-reconciliation in `apps/demo/src/lib/db.ts` (`reconcileRun`) refuses to auto-match a payout line if its `(address, amount, memo)` tuple is shared with another completed-unpaid line in the same run. Memo comparison is strict equality, not substring containment. Ambiguous rows must be marked paid manually so a typo or duplicate line never mis-credits a payee.
+
+### Pre-payment balance refresh
+
+The Pay-batch button in `apps/demo/src/app/payouts/[id]/PayoutRunDetail.tsx` calls `POST /api/payouts/[id]/preflight` and only opens the QR modal if the freshly re-queried treasury spendable balance still covers the run. Catches a balance drop that happened between page load and click.
+
+### Stale-sync recovery
+
+`syncUfvk` keeps an in-process lock with a started-at timestamp; a process that dies mid-sync no longer blocks its own retries (`apps/demo/src/lib/sync.ts`, `STALE_LOCK_MS`). On every DB initialisation, any `sync_status = 'syncing'` rows left over from a previous process are reset to `idle` with a "previous sync was interrupted" hint (`apps/demo/src/lib/db.ts`, `resetStaleSync`).
