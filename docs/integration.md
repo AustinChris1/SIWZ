@@ -7,6 +7,7 @@ SIWZ ships three sign-in methods. With `@siwz/core@0.2.2+`, `@siwz/react@0.2.0+`
 | **Memo-challenge** (recommended) | `<MemoSignIn />` from `@siwz/react` | `issueMemoHandler` + `pollMemoHandler` from `@siwz/next-auth/memo`, plus `SiwzMemoProvider` for NextAuth | Zero for transparent. A `shieldedExplorer` adapter if you serve `zs…`/`u1…` sign-ins. |
 | **Signed message** | `<SignInWithZcash />` from `@siwz/react` | `SiwzProvider` + `issueNonce` from `@siwz/next-auth` | Zero |
 | **MetaMask snap** | `enableSnap` + `onSnapAuth` on `<SignInWithZcash />` | snap helpers in `@siwz/react` | A "snap" credentials provider and an envelope endpoint (see the ZBooks reference) |
+| **Sign out** | `<SignOut />` from `@siwz/react` (idle / busy / optional-confirm states) | n/a; uses your auth layer's signOut() | Zero |
 
 All install the same way:
 
@@ -224,4 +225,6 @@ The ChainSafe WebZjs Zcash Snap exposes a seed fingerprint and a unified viewing
 
 `apps/zecwall` shows all three behind tabs in a few small files. If you want your own UI for the signed-message and snap flows, use the headless `useSiwz()` hook from `@siwz/react` instead of `<SignInWithZcash />`; it returns the state machine (`status`, `buildChallenge`, `submitSignature`, `trySnapSignIn`, etc.) and you render whatever you like.
 
-Read the session anywhere on the server with `getServerSession(authOptions)`; the signed-in Zcash address (or memo / snap identity) is on `session.user.address` once you've augmented next-auth's `User` interface (see [quickstart.md §4](./quickstart.md#4-typing-the-session)).
+Read the session anywhere on the server with `getServerSession(authOptions)`; the signed-in Zcash address (or memo / snap identity) is on `session.user.address` once you've augmented next-auth's `User` interface (see [quickstart.md §5](./quickstart.md#5-typing-the-session)).
+
+For the matching sign-out flow, drop in `<SignOut onSignOut={() => signOut({ callbackUrl: "/" })} />` from `@siwz/react`. Three variants (`primary` / `secondary` / `link`), optional inline confirm prompt, busy state during the sign-out call.

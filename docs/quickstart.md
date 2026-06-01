@@ -165,7 +165,34 @@ export function ClassicSignIn() {
 }
 ```
 
-## 4. Typing the session
+## 4. Sign out
+
+`@siwz/react` ships a matching `<SignOut />` component with idle/busy/optional-confirm states. Auth-layer agnostic; you wire it to whatever sign-out function you use.
+
+```tsx
+"use client";
+import { SignOut } from "@siwz/react";
+import { signOut } from "next-auth/react";
+import "@siwz/react/styles.css";
+
+export function SignOutButton() {
+  return <SignOut onSignOut={() => signOut({ callbackUrl: "/" })} />;
+}
+```
+
+Optional confirm prompt and variants:
+
+```tsx
+<SignOut
+  onSignOut={() => signOut({ callbackUrl: "/" })}
+  confirm                    // inline "Sign out? [Sign out] [Cancel]" prompt
+  variant="link"             // "primary" | "secondary" (default) | "link"
+  buttonLabel="Sign out"
+  busyLabel="Signing out…"
+/>
+```
+
+## 5. Typing the session
 
 `SiwzProvider` attaches `addressType` and `network` to the resolved user. Augment NextAuth's types so callbacks don't need casts:
 

@@ -227,7 +227,7 @@ export default function Home() {
               <div className="kicker"><span className="marker">&sect; 03</span>&nbsp; Quickstart</div>
               <h2>Drop it into a Next.js app.</h2>
             </div>
-            <p className="blurb">Two route handlers, one NextAuth provider, one component. That is the whole memo-challenge integration. No explorer setup; the SDK chains a free public explorer (3xpl&nbsp;+&nbsp;Blockchair) by default.</p>
+            <p className="blurb">Two route handlers, one NextAuth provider, one sign-in component, one sign-out component. That is the whole integration.</p>
           </div>
           <div className="code-card">
             <div className="code-head">
@@ -281,7 +281,7 @@ export default function Home() {
             </div>
             <div className="pkg">
               <div className="name">@siwz/react</div>
-              <div className="body">{"<MemoSignIn />, <SignInWithZcash />, the useSiwz() hook, and MetaMask Snap helpers."}</div>
+              <div className="body">{"<MemoSignIn />, <SignInWithZcash />, <SignOut />, the useSiwz() hook, and MetaMask Snap helpers."}</div>
             </div>
             <div className="pkg">
               <div className="name">@siwz/next-auth</div>
@@ -410,10 +410,12 @@ const FULL_HTML = `<span class="c">// app/api/auth/memo/issue/route.ts</span>
 <span class="k">export</span> { handler <span class="k">as</span> <span class="t">GET</span>, handler <span class="k">as</span> <span class="t">POST</span> };
 
 <span class="c">// app/SignIn.tsx  (client)</span>
-<span class="k">import</span> { <span class="t">MemoSignIn</span> } <span class="k">from</span> <span class="s">"@siwz/react"</span>;
-<span class="k">import</span> { <span class="fn">signIn</span> } <span class="k">from</span> <span class="s">"next-auth/react"</span>;
+<span class="k">import</span> { <span class="t">MemoSignIn</span>, <span class="t">SignOut</span> } <span class="k">from</span> <span class="s">"@siwz/react"</span>;
+<span class="k">import</span> { <span class="fn">signIn</span>, <span class="fn">signOut</span> } <span class="k">from</span> <span class="s">"next-auth/react"</span>;
 
 &lt;<span class="t">MemoSignIn</span>
   <span class="p">onSuccess</span>={({ identity, envelope }) =&gt;
     <span class="fn">signIn</span>(<span class="s">"memo"</span>, { identity, envelope, redirect: <span class="k">false</span> })}
-/&gt;;`;
+/&gt;;
+
+&lt;<span class="t">SignOut</span> <span class="p">onSignOut</span>={() =&gt; <span class="fn">signOut</span>({ callbackUrl: <span class="s">"/"</span> })} /&gt;;`;

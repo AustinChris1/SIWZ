@@ -20,6 +20,7 @@ Peer-deps: `react >= 18`, `react-dom >= 18`. `qrcode` ships as a regular depende
 |---|---|---|
 | `<MemoSignIn />` | Memo-challenge UI: renders a ZIP 321 QR, polls a server endpoint until the payment lands, surfaces the resolved identity. Works with every Zcash wallet. | Recommended |
 | `<SignInWithZcash />` | Signed-message UI: address input, SIWZ challenge, paste-signature, verify. Optional one-click Snap path via `enableSnap` + `onSnapAuth`. | |
+| `<SignOut />` | Matching sign-out button with idle / busy / optional-confirm states. Auth-layer agnostic; you pass an `onSignOut` handler. | |
 | `useSiwz()` | Headless hook backing the signed-message state machine. Render whatever markup you like. | |
 | `snapConnect`, `snapGetSeedFingerprint`, `snapGetViewingKey`, `detectSnapEnvironment`, ... | Low-level helpers for the ChainSafe MetaMask Zcash Snap. | |
 
@@ -108,6 +109,35 @@ import { signIn } from "next-auth/react";
 />
 ```
 
+## Sign out
+
+```tsx
+import { SignOut } from "@siwz/react";
+import "@siwz/react/styles.css";
+import { signOut } from "next-auth/react";
+
+<SignOut onSignOut={() => signOut({ callbackUrl: "/" })} />
+```
+
+`<SignOut />` is intentionally not coupled to next-auth; pass any handler. Optional confirm prompt and three visual variants:
+
+```tsx
+<SignOut
+  onSignOut={async () => {
+    await fetch("/api/logout", { method: "POST" });
+    window.location.href = "/";
+  }}
+  confirm
+  confirmMessage="Sign out of MyApp?"
+  variant="link"       // "primary" | "secondary" (default) | "link"
+  buttonLabel="Sign out"
+  busyLabel="Signing out…"
+  onError={(msg) => console.warn("[signout]", msg)}
+/>
+```
+
+Slots overridable via `classNames`: `root`, `button`, `confirm`, `confirmYes`, `confirmNo`.
+
 ## Headless: `useSiwz()`
 
 ```tsx
@@ -177,7 +207,7 @@ Default stylesheet uses CSS variables. Override the accent and you're done:
 }
 ```
 
-Or skip the stylesheet entirely and pass `classNames` to either component to wire your own Tailwind / CSS-in-JS classes per slot. `<SignInWithZcash />` slots: `root`, `button`, `addressInput`, `challenge`, `signatureInput`, `error`, `success`. `<MemoSignIn />` slots: `root`, `button`, `challenge`, `qr`, `details`, `pending`, `error`, `success`.
+Or skip the stylesheet entirely and pass `classNames` to any component to wire your own Tailwind / CSS-in-JS classes per slot. `<SignInWithZcash />` slots: `root`, `button`, `addressInput`, `challenge`, `signatureInput`, `error`, `success`. `<MemoSignIn />` slots: `root`, `button`, `challenge`, `qr`, `details`, `pending`, `error`, `success`. `<SignOut />` slots: `root`, `button`, `confirm`, `confirmYes`, `confirmNo`.
 
 ## Related packages
 

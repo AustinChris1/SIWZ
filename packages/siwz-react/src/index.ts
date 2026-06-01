@@ -8,6 +8,8 @@ export type {
   MemoChallengeData,
   MemoPollResult,
 } from "./MemoSignIn.js";
+export { SignOut } from "./SignOut.js";
+export type { SignOutProps, SignOutHandler } from "./SignOut.js";
 export {
   detectSnapEnvironment,
   requestSnapInstall,

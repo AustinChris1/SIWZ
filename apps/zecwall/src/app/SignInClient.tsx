@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MemoSignIn, SignInWithZcash, type SnapIdentity } from "@siwz/react";
+import { MemoSignIn, SignInWithZcash, SignOut, type SnapIdentity } from "@siwz/react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -138,9 +138,5 @@ function MemoFlow() {
 }
 
 export function SignOutButton() {
-  return (
-    <button className="btn" onClick={() => signOut({ callbackUrl: "/" })}>
-      Sign out
-    </button>
-  );
+  return <SignOut onSignOut={() => signOut({ callbackUrl: "/" })} />;
 }
