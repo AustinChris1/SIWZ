@@ -36,7 +36,7 @@ export interface IssueMemoChallengeOpts {
   network: Network;
   /** Force a specific mode. Defaults to auto-detection from the address type. */
   mode?: MemoChallengeMode;
-  /** Base amount in ZEC. The 4-digit nonce is added in zatoshi. Default 0.0001. */
+  /** Base amount in ZEC. A 3-digit zatoshi nonce is added on top. Default 0.000001. */
   baseAmountZec?: string;
   /** Challenge TTL in seconds. Default 600. */
   ttlSeconds?: number;
@@ -76,18 +76,20 @@ export interface VerifyMemoChallengeOpts {
   now?: Date;
 }
 
+export type MemoVerifyErrorCode =
+  | "MALFORMED_TOKEN"
+  | "BAD_SIGNATURE"
+  | "EXPIRED"
+  | "AMOUNT_MISMATCH"
+  | "MEMO_MISMATCH"
+  | "MISSING_OBSERVATION"
+  | "RECIPIENT_MISMATCH";
+
 export interface VerifyMemoChallengeResult {
   ok: boolean;
   identity?: string;
   mode?: MemoChallengeMode;
-  error?:
-    | "MALFORMED_TOKEN"
-    | "BAD_SIGNATURE"
-    | "EXPIRED"
-    | "AMOUNT_MISMATCH"
-    | "MEMO_MISMATCH"
-    | "MISSING_OBSERVATION"
-    | "RECIPIENT_MISMATCH";
+  error?: MemoVerifyErrorCode;
   errorMessage?: string;
 }
 
@@ -118,8 +120,8 @@ export async function issueMemoChallenge(opts: IssueMemoChallengeOpts): Promise<
   const identity = opts.identity ?? `anon:${secureRandomU32().toString(16).padStart(8, "0")}${secureRandomU32().toString(16).padStart(8, "0")}`;
 
   if (mode === "transparent-amount") {
-    const base = zecToZatoshi(opts.baseAmountZec ?? "0.0001");
-    const nonceZatoshi = BigInt(secureRandomU32() % 10_000);
+    const base = zecToZatoshi(opts.baseAmountZec ?? "0.000001");
+    const nonceZatoshi = BigInt(secureRandomU32() % 1_000);
     const totalZatoshi = base + nonceZatoshi;
     const amountZec = formatZatoshi(totalZatoshi);
 

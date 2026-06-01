@@ -18,9 +18,65 @@ const WALLETS: { name: string; memo: Cell; signed: Cell; snap: Cell }[] = [
   { name: "MetaMask + ChainSafe Snap", memo: "no", signed: "no", snap: "yes" },
 ];
 
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://siwz.vercel.app/#website",
+      url: "https://siwz.vercel.app/",
+      name: "Sign in with Zcash",
+      alternateName: ["SIWZ", "Sign in with Zcash (SIWZ)"],
+      description:
+        "Drop-in, non-custodial sign-in for Zcash apps. Three flows, three npm packages.",
+      inLanguage: "en",
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      name: "Sign in with Zcash",
+      alternateName: "SIWZ",
+      programmingLanguage: "TypeScript",
+      codeRepository: "https://github.com/austinchris/SWZ",
+      license: "https://opensource.org/licenses/MIT",
+      keywords:
+        "zcash, sign-in, authentication, zip-321, memo-challenge, nextauth, react, metamask-snap, siwe-alternative",
+      author: { "@type": "Person", name: "austinchris" },
+      url: "https://siwz.vercel.app/",
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "@siwz/core",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Node.js, Browser, Edge",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      url: "https://www.npmjs.com/package/@siwz/core",
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "@siwz/react",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Browser",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      url: "https://www.npmjs.com/package/@siwz/react",
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "@siwz/next-auth",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Node.js",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      url: "https://www.npmjs.com/package/@siwz/next-auth",
+    },
+  ],
+};
+
 export default function Home() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <nav className="nav">
         <div className="container nav-inner">
           <a className="brand" href="#top"><Logo /> SIWZ</a>
@@ -142,7 +198,7 @@ export default function Home() {
                 <div className="name">Memo challenge</div>
                 <div className="name-tag">Recommended</div>
               </div>
-              <div className="body">Send a tiny shielded payment carrying a one-time memo. Server-side <code>issueMemoChallenge</code> hands back a ZIP&nbsp;321 URI; <code>verifyMemoChallenge</code> validates the on-chain artifact. No signmessage feature needed in the wallet.</div>
+              <div className="body">Send a tiny payment with a one-time memo or unique amount. <code>&lt;MemoSignIn /&gt;</code> on the client, <code>issueMemoHandler</code> + <code>pollMemoHandler</code> on the server, <code>SiwzMemoProvider</code> for NextAuth. No signmessage feature needed in the wallet; works with every ZIP&nbsp;321 wallet.</div>
             </div>
             <div className="feature">
               <div className="num">02</div>
@@ -171,12 +227,12 @@ export default function Home() {
               <div className="kicker"><span className="marker">&sect; 03</span>&nbsp; Quickstart</div>
               <h2>Drop it into a Next.js app.</h2>
             </div>
-            <p className="blurb">A NextAuth provider on the server, one component on the client. That is the whole integration.</p>
+            <p className="blurb">Two route handlers, one NextAuth provider, one component. That is the whole memo-challenge integration. No explorer setup; the SDK chains a free public explorer (3xpl&nbsp;+&nbsp;Blockchair) by default.</p>
           </div>
           <div className="code-card">
             <div className="code-head">
               <div className="dots"><span /><span /><span /></div>
-              <div className="file">app/api/auth/[...nextauth]/route.ts &middot; app/SignIn.tsx</div>
+              <div className="file">app/api/auth/memo/{`{issue,poll}`}/route.ts &middot; app/api/auth/[...nextauth]/route.ts &middot; app/SignIn.tsx</div>
             </div>
             <pre className="code-body" dangerouslySetInnerHTML={{ __html: FULL_HTML }} />
           </div>
@@ -225,11 +281,11 @@ export default function Home() {
             </div>
             <div className="pkg">
               <div className="name">@siwz/react</div>
-              <div className="body">{"<SignInWithZcash />, the useSiwz() hook, and MetaMask Snap helpers."}</div>
+              <div className="body">{"<MemoSignIn />, <SignInWithZcash />, the useSiwz() hook, and MetaMask Snap helpers."}</div>
             </div>
             <div className="pkg">
               <div className="name">@siwz/next-auth</div>
-              <div className="body">A NextAuth credentials provider plus stateless HMAC nonce tokens for serverless.</div>
+              <div className="body">SiwzProvider, SiwzMemoProvider, drop-in route handlers, stateless HMAC nonces. Free transparent explorer chain by default.</div>
             </div>
           </div>
         </div>
@@ -333,19 +389,31 @@ function ChatIcon() {
   );
 }
 
-const FULL_HTML = `<span class="c">// app/api/auth/[...nextauth]/route.ts  (server)</span>
-<span class="k">import</span> { <span class="t">SiwzProvider</span> } <span class="k">from</span> <span class="s">"@siwz/next-auth"</span>;
-<span class="k">export const</span> authOptions = {
-  <span class="p">providers</span>: [ <span class="fn">SiwzProvider</span>({ <span class="p">domain</span>: <span class="s">"myapp.com"</span> }) ],
-};
+const FULL_HTML = `<span class="c">// app/api/auth/memo/issue/route.ts</span>
+<span class="k">import</span> { <span class="fn">issueMemoHandler</span> } <span class="k">from</span> <span class="s">"@siwz/next-auth/memo"</span>;
+<span class="k">export const</span> POST = <span class="fn">issueMemoHandler</span>({
+  <span class="p">secret</span>: process.env.<span class="t">NEXTAUTH_SECRET</span>!,
+  <span class="p">serviceAddress</span>: process.env.<span class="t">SIWZ_SERVICE_ADDRESS</span>!,
+  <span class="p">network</span>: <span class="s">"mainnet"</span>,
+});
 
-<span class="c">// SignIn.tsx  (client)</span>
-<span class="k">import</span> { <span class="t">SignInWithZcash</span> } <span class="k">from</span> <span class="s">"@siwz/react"</span>;
+<span class="c">// app/api/auth/memo/poll/route.ts</span>
+<span class="k">import</span> { <span class="fn">pollMemoHandler</span> } <span class="k">from</span> <span class="s">"@siwz/next-auth/memo"</span>;
+<span class="k">export const</span> POST = <span class="fn">pollMemoHandler</span>({ <span class="p">secret</span>: process.env.<span class="t">NEXTAUTH_SECRET</span>! });
 
-&lt;<span class="t">SignInWithZcash</span>
-  <span class="p">domain</span>=<span class="s">"myapp.com"</span>
-  <span class="p">uri</span>=<span class="s">"https://myapp.com"</span>
-  <span class="p">network</span>=<span class="s">"mainnet"</span>
-  <span class="p">getNonce</span>={() =&gt; <span class="fn">fetch</span>(<span class="s">"/api/siwz/nonce"</span>).then(r =&gt; r.json()).then(j =&gt; j.nonce)}
-  <span class="p">submit</span>={({ message, signature }) =&gt; <span class="fn">signIn</span>(<span class="s">"siwz"</span>, { message, signature })}
+<span class="c">// app/api/auth/[...nextauth]/route.ts</span>
+<span class="k">import</span> <span class="t">NextAuth</span> <span class="k">from</span> <span class="s">"next-auth"</span>;
+<span class="k">import</span> { <span class="t">SiwzMemoProvider</span> } <span class="k">from</span> <span class="s">"@siwz/next-auth"</span>;
+<span class="k">const</span> handler = <span class="fn">NextAuth</span>({
+  <span class="p">providers</span>: [ <span class="fn">SiwzMemoProvider</span>({ <span class="p">secret</span>: process.env.<span class="t">NEXTAUTH_SECRET</span>! }) ],
+});
+<span class="k">export</span> { handler <span class="k">as</span> <span class="t">GET</span>, handler <span class="k">as</span> <span class="t">POST</span> };
+
+<span class="c">// app/SignIn.tsx  (client)</span>
+<span class="k">import</span> { <span class="t">MemoSignIn</span> } <span class="k">from</span> <span class="s">"@siwz/react"</span>;
+<span class="k">import</span> { <span class="fn">signIn</span> } <span class="k">from</span> <span class="s">"next-auth/react"</span>;
+
+&lt;<span class="t">MemoSignIn</span>
+  <span class="p">onSuccess</span>={({ identity, envelope }) =&gt;
+    <span class="fn">signIn</span>(<span class="s">"memo"</span>, { identity, envelope, redirect: <span class="k">false</span> })}
 /&gt;;`;

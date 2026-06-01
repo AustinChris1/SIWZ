@@ -120,9 +120,9 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
     expect(ch.uri).toMatch(/^zcash:t1/);
     expect(ch.token.split(".").length).toBe(2);
     expect(ch.amountZec).toMatch(/^0\.\d+$/);
-    expect(BigInt(ch.amountZatoshi)).toBeGreaterThanOrEqual(zecToZatoshi("0.0001"));
-    // Base + 4-digit nonce must stay under 0.0002 ZEC (regression guard).
-    expect(BigInt(ch.amountZatoshi)).toBeLessThanOrEqual(zecToZatoshi("0.0002"));
+    expect(BigInt(ch.amountZatoshi)).toBeGreaterThanOrEqual(zecToZatoshi("0.000001"));
+    // Base + 3-digit nonce stays at or below 1099 zatoshi.
+    expect(BigInt(ch.amountZatoshi)).toBeLessThanOrEqual(zecToZatoshi("0.000011"));
   });
 
   it("accepts anonymous (no identity) and assigns a server-generated one", async () => {
@@ -151,7 +151,8 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
     expect(parsed.address).toBe(serviceAddress);
   });
 
-  it("each issuance gets a unique amount (vanishing collision)", async () => {
+  it("each issuance gets a near-unique amount (low collision rate)", async () => {
+    // 3-digit nonce (0-999) over 25 draws: expected collisions ~0.3.
     const amounts = new Set<string>();
     for (let i = 0; i < 25; i++) {
       const ch = await issueMemoChallenge({
@@ -159,7 +160,7 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
       });
       amounts.add(ch.amountZec);
     }
-    expect(amounts.size).toBe(25);
+    expect(amounts.size).toBeGreaterThanOrEqual(22);
   });
 
   it("round-trip verify succeeds with matching observation", async () => {

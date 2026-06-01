@@ -40,28 +40,32 @@ Each layer is independently usable:
 
 The verifier needs to confirm a tx landed on-chain. The shape of that question depends on the service address type:
 
-- **Transparent service address** asks "did anyone pay address X with amount Y?", which is answerable by any public block explorer (we use [Blockchair](https://blockchair.com)). Zero infra.
-- **Shielded service address** asks "did anyone include memo `SIWZ:<nonce>` in a note to address X?", which only the IVK holder can answer. Needs a Zcash daemon (HTTP RPC) or a light-wallet CLI (`zingo-cli`) reachable from the server.
+- **Transparent service address** asks "did anyone pay address X with amount Y?", which is answerable by any public block explorer. SIWZ ships free defaults; zero infra required.
+- **Shielded service address** asks "did anyone include memo `SIWZ:<nonce>` in a note to address X?", which only the IVK holder can answer. Needs a Zcash daemon (HTTP RPC) or a light-wallet wrapper (`zingo-cli`) reachable from the server.
+
+The shared interface in `@siwz/core/explorers`:
 
 ```ts
-// apps/demo/src/lib/explorer.ts
-interface Explorer {
-  getRecentOutputsToAddress(addr, limit): Promise<RecentOutput[]>;
+interface MemoExplorer {
+  getRecentOutputsToAddress?(addr, limit): Promise<RecentOutput[]>;
   getRecentMemosToAddress?(addr, limit): Promise<RecentMemo[]>;
-  // ZBooks accounting + payouts:
-  getTransactionsForUfvk?(ufvk, opts): Promise<UfvkSyncResult>;
-  getBalanceForUfvk?(ufvk, opts): Promise<UfvkBalance>;
 }
 ```
 
+ZBooks extends this with additional methods (`getTransactionsForUfvk`, `getBalanceForUfvk`) that power its accounting and payouts; the SIWZ-protocol-level core stays minimal.
+
 Implementations that ship today:
 
-- `BlockchairExplorer`: public Zcash API. Transparent only.
-- `ZcashRpcExplorer`: talks to your zcashd/zaino/zallet daemon via HTTP or `zcash-cli`. Both transparent and shielded.
-- `LightwalletExplorer`: HTTP client for the `zingo-cli` wrapper; satisfies the UFVK sync and balance methods that ZBooks accounting and payouts use.
-- `MockExplorer`: in-memory, for DEMO mode and tests.
+| Explorer | Package | Transparent | Shielded memos | Notes |
+|---|---|---|---|---|
+| `ThreeXplExplorer` | `@siwz/core/explorers` | ✅ | – | Defaults to 3xpl sandbox (anonymous, rate-limited). Pass `apiKey` for prod tier. |
+| `BlockchairExplorer` | `@siwz/core/explorers` | ✅ | – | Public Zcash API. Free with rate limit; `apiKey` raises it. |
+| `MultiExplorer` | `@siwz/core/explorers` | inherits | inherits | Wraps a list of explorers; falls back to the next on any thrown error. |
+| `ZcashRpcExplorer` | apps/demo (reference) | ✅ | ✅ | Talks to your zcashd/zaino/zallet via HTTP or `zcash-cli`. |
+| `LightwalletExplorer` | apps/demo (reference) | – | ✅ | HTTP client for the `apps/lightwallet-rpc` `zingo-cli` wrapper. Also satisfies UFVK sync/balance methods. |
+| `MockExplorer` | apps/demo (reference) | ✅ | ✅ | In-memory, for DEMO mode and tests. |
 
-The interface is small, so adding a backend is a few dozen lines. See `docs/winning-deployment.md` for the lite-wallet deployment recipe.
+`pollMemoHandler` from `@siwz/next-auth/memo` defaults to `new MultiExplorer([new ThreeXplExplorer(), new BlockchairExplorer()])` for transparent. Consumers don't have to think about explorers unless they want to override. See [`docs/winning-deployment.md`](./winning-deployment.md) for the lightwallet-rpc deployment recipe.
 
 ## ZBooks payouts: non-custodial, on top of the viewing key
 
@@ -117,9 +121,9 @@ See [`security.md`](./security.md) for the full table. The short version:
 
 The architecture supports several:
 
-1. **Vercel + Blockchair**: transparent sign-in only. $0 infra. ZBooks's current production-ready shape.
-2. **Vercel + remote light-wallet RPC**: shielded sign-in. Add a $3-5/mo VPS running `zingo-cli` + a thin HTTPS wrapper. See `docs/winning-deployment.md`.
+1. **Vercel + free public explorers**: transparent sign-in only. $0 infra. Default `MultiExplorer(3xpl + Blockchair)` covers it. ZBooks's current production-ready shape.
+2. **Vercel + remote light-wallet RPC**: shielded sign-in. Add a $3-5/mo VPS running the apps/lightwallet-rpc Docker image (Zingo-CLI-based). See `docs/winning-deployment.md`.
 3. **Everything on one VPS**: simplest single-server deployment. Both flows available. Production trade-off: you maintain a server, you can't horizontally scale the wallet sync state.
 4. **Self-hosted node + shielded**: for maximum privacy you can run your own zcashd or zallet and skip the light-wallet step. ~60 GB disk, multi-day sync, full sovereignty.
 
-The protocol code is identical across all four. Only the `Explorer` implementation and the env config differ.
+The protocol code is identical across all four. Only the explorer wiring and the env config differ.

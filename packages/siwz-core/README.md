@@ -53,16 +53,23 @@ if (result.ok) signTheUserIn(result.identity);
 
 The mode (transparent-amount vs shielded-memo) is inferred from the service address type. `inferMemoChallengeMode(address)` exposes the same inference if you need it.
 
-## Transparent explorer helper
+## Transparent explorer helpers
 
-`@siwz/core/explorers` ships a Blockchair-backed `MemoExplorer` so the server side of the transparent-amount flow doesn't need its own block-explorer client:
+`@siwz/core/explorers` ships three explorers and a fallback wrapper:
+
+| Class | Use |
+|---|---|
+| `ThreeXplExplorer` | 3xpl-backed. Defaults to `sandbox-api.3xpl.com` (anonymous, rate-limited, no SLA). Pass `apiKey` for the prod tier. |
+| `BlockchairExplorer` | Blockchair-backed. Public tier without a key, paid tier with one. |
+| `MultiExplorer` | Wraps a list of explorers; falls back to the next on any thrown error. |
 
 ```ts
-import { BlockchairExplorer, type MemoExplorer } from "@siwz/core/explorers";
+import { MultiExplorer, ThreeXplExplorer, BlockchairExplorer } from "@siwz/core/explorers";
 
-const explorer: MemoExplorer = new BlockchairExplorer({
-  // optional: apiKey (raises rate limits), baseUrl, fetch (DI for tests)
-});
+const explorer = new MultiExplorer([
+  new ThreeXplExplorer({ apiKey: process.env.THREEXPL_API_KEY }),
+  new BlockchairExplorer({ apiKey: process.env.BLOCKCHAIR_API_KEY }),
+]);
 
 const outputs = await explorer.getRecentOutputsToAddress(serviceAddress, 50);
 for (const output of outputs) {
@@ -76,9 +83,9 @@ for (const output of outputs) {
 }
 ```
 
-For the full Next.js route-handler version (issue + poll, rate-limit hook, the 200/202/4xx wire convention `<MemoSignIn />` expects), use [`@siwz/next-auth/memo`](https://www.npmjs.com/package/@siwz/next-auth) which wraps this loop in `pollMemoHandler({ explorer, secret })`.
+For the full Next.js route-handler version (issue + poll, default-wired explorer, the 200/202/4xx wire convention `<MemoSignIn />` expects), use [`@siwz/next-auth/memo`](https://www.npmjs.com/package/@siwz/next-auth). The `pollMemoHandler` there already chains this MultiExplorer as a default, so most consumers never touch these classes directly.
 
-Blockchair indexes the public chain only, so this class implements `getRecentOutputsToAddress` and not `getRecentMemosToAddress`. For shielded-memo sign-in, run a backend that holds the IVK (see [`apps/lightwallet-rpc`](https://github.com/ZecHub/siwz/tree/main/apps/lightwallet-rpc)) and write a thin adapter that fills in `getRecentMemosToAddress` on the same `MemoExplorer` interface.
+These explorers index the public chain only. For shielded-memo sign-in (`zs…`/`u1…` service address), run a backend that holds the IVK (see [`apps/lightwallet-rpc`](https://github.com/ZecHub/siwz/tree/main/apps/lightwallet-rpc)) and write a thin adapter implementing `getRecentMemosToAddress` on the `MemoExplorer` interface.
 
 ## Signed-message sign-in (SIWE-style)
 
@@ -151,7 +158,7 @@ type SiwzFields, type VerifyResult, type VerifyOptions
 // Memo challenge + ZIP 321
 issueMemoChallenge, verifyMemoChallenge, inferMemoChallengeMode
 buildZip321, buildZip321Multi, parseZip321
-type MemoChallenge, type MemoChallengeMode
+type MemoChallenge, type MemoChallengeMode, type MemoVerifyErrorCode
 type IssueMemoChallengeOpts, type VerifyMemoChallengeOpts, type VerifyMemoChallengeResult
 type ZIP321Request
 
@@ -176,8 +183,8 @@ type MemoExplorer, type RecentOutput, type RecentMemo
 
 ```ts
 // Subpath: @siwz/core/explorers
-BlockchairExplorer, ExplorerError
-type BlockchairExplorerOptions
+BlockchairExplorer, ThreeXplExplorer, MultiExplorer, ExplorerError
+type BlockchairExplorerOptions, ThreeXplExplorerOptions
 ```
 
 ## Tests

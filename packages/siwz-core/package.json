@@ -1,6 +1,6 @@
 {
   "name": "@siwz/core",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Sign in with Zcash — core protocol: message format, address parsing, signature verification",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,7 +40,27 @@
     "tsup": "^8.2.4",
     "vitest": "^2.0.5"
   },
-  "keywords": ["zcash", "siwz", "sign-in", "authentication"],
+  "keywords": [
+    "zcash",
+    "siwz",
+    "sign-in-with-zcash",
+    "sign-in",
+    "authentication",
+    "auth",
+    "zip-321",
+    "zip-304",
+    "memo-challenge",
+    "shielded",
+    "wallet",
+    "siwe-alternative"
+  ],
+  "homepage": "https://siwz.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/austinchris/SWZ.git",
+    "directory": "packages/siwz-core"
+  },
+  "bugs": "https://github.com/austinchris/SWZ/issues",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

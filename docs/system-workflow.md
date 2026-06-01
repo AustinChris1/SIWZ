@@ -28,7 +28,7 @@ Every flow ends the same way, with one `signIn()` call into NextAuth that mints 
 
 **1. Signed-message paste.** The app shows a SIWZ message (an EIP-4361-style statement with domain, address, nonce, and timestamp). The user signs it in a wallet that supports message signing (zcashd, YWallet) and pastes the signature back. The server recovers the public key from the secp256k1 signature over the Zcash-magic-prefixed hash and checks that it matches the claimed address, plus the nonce, domain, and expiry. Instant, no on-chain cost, transparent addresses only.
 
-**2. Memo-challenge (the default, and the Zcash-native one).** The server issues a challenge and renders a `zcash:` payment URI as a QR code, carrying a `SIWZ:<nonce>` memo to the app's service address. The user pays a tiny shielded amount from any wallet (Zodl, YWallet, Zingo). Usually within 5 to 15 seconds the transaction lands, the VPS wrapper decrypts the memo using the service address's incoming viewing key, and the app matches the nonce and signs the user in. This works with every shielded wallet, because it only relies on sending a normal shielded payment.
+**2. Memo-challenge (the default, and the Zcash-native one).** The server issues a challenge and renders a `zcash:` payment URI as a QR code, carrying either a unique amount (transparent service address) or a `SIWZ:<nonce>` memo (shielded service address). The user pays a tiny shielded amount from any wallet (Zodl, YWallet, Zingo). Usually within 5 to 15 seconds the transaction lands. For transparent service addresses, a free public explorer (3xpl + Blockchair fallback) matches the amount; for shielded service addresses, a VPS-hosted `zingo-cli` wrapper decrypts the memo using the incoming viewing key. Either way, the app matches the nonce and signs the user in. This works with every ZIP 321 wallet because it only relies on sending a normal payment.
 
 **3. MetaMask + ChainSafe Zcash Snap.** The snap exposes a seed fingerprint and a unified full viewing key. The server HMAC-signs an envelope binding them to an identity and mints a session. One click, no QR, no on-chain fee. This path is the most ergonomic where the snap is available.
 
@@ -62,13 +62,20 @@ Browser / wallet
       |
       v
 ZBooks (Next.js, NextAuth)            stateless, hosts free on Vercel or runs locally
-      |  HTTPS + bearer token
-      v
-lightwallet-rpc wrapper  (a ~$3/mo VPS)   exposes /memos, /transactions, /balance
-      |  raw gRPC
-      v
-public lightwalletd (zec.rocks, with mirror failover)
+      |
+      |--- transparent path ---> public explorers (3xpl + Blockchair)
+      |                          (no infra; SDK default)
+      |
+      |--- shielded path ---> HTTPS + bearer token
+                              |
+                              v
+                       lightwallet-rpc wrapper  (a ~$3/mo VPS)
+                              |  raw gRPC
+                              v
+                       public lightwalletd (zec.rocks, with mirror failover)
 ```
+
+Transparent sign-in and accounting against transparent treasuries need no extra infrastructure. The shielded leg, used for shielded sign-in and UFVK-based accounting, is the only thing that needs the VPS.
 
 - ZBooks holds no keys at all beyond what it stores in its data file: viewing keys, which are read-only.
 - The VPS wrapper also only ever uses viewing keys. It reads; it never spends.

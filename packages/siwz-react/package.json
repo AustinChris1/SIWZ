@@ -41,7 +41,27 @@
     "typescript": "^5.5.4",
     "tsup": "^8.2.4"
   },
-  "keywords": ["zcash", "siwz", "react", "sign-in", "authentication"],
+  "keywords": [
+    "zcash",
+    "siwz",
+    "sign-in-with-zcash",
+    "react",
+    "sign-in",
+    "authentication",
+    "auth",
+    "memo-challenge",
+    "zip-321",
+    "metamask-snap",
+    "wallet-connect",
+    "siwe-alternative"
+  ],
+  "homepage": "https://siwz.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/austinchris/SWZ.git",
+    "directory": "packages/siwz-react"
+  },
+  "bugs": "https://github.com/austinchris/SWZ/issues",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

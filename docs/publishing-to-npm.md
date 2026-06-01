@@ -31,7 +31,7 @@ pnpm --filter @siwz/core test
 
 # 2. Bump the version. Independent versions are fine; bump only what changed.
 #    Each command updates the package's package.json + creates a git tag.
-pnpm --filter @siwz/core version patch        # 0.1.0 → 0.1.1
+pnpm --filter @siwz/core version patch        # 0.2.2 → 0.2.3
 pnpm --filter @siwz/react version patch       # only if react changed
 pnpm --filter @siwz/next-auth version patch   # only if next-auth changed
 
@@ -63,7 +63,7 @@ This prints the tarball contents without uploading. Expect `dist/`, `package.jso
 
 ## Deprecation / unpublish
 
-24-hour unpublish window after publish (`npm unpublish @siwz/core@0.1.0`). After that, use `npm deprecate @siwz/core@0.1.0 "use 0.1.1"` instead.
+24-hour unpublish window after publish (`npm unpublish @siwz/core@0.2.3`). After that, use `npm deprecate @siwz/core@0.2.3 "use 0.2.4"` instead.
 
 ## Automating it with CI
 

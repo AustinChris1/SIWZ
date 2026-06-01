@@ -48,6 +48,7 @@ export {
 export type {
   MemoChallenge,
   MemoChallengeMode,
+  MemoVerifyErrorCode,
   IssueMemoChallengeOpts,
   VerifyMemoChallengeOpts,
   VerifyMemoChallengeResult,

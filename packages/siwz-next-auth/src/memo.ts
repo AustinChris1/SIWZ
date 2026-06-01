@@ -4,10 +4,38 @@
 import { createHmac } from "node:crypto";
 import {
   issueMemoChallenge,
+  parseAddress,
   verifyMemoChallenge,
+  type MemoChallengeMode,
   type MemoExplorer,
+  type MemoVerifyErrorCode,
   type Network,
+  type RecentMemo,
+  type RecentOutput,
 } from "@siwz/core";
+import {
+  BlockchairExplorer,
+  MultiExplorer,
+  ThreeXplExplorer,
+} from "@siwz/core/explorers";
+
+// Re-export so consumers writing custom explorers don't have to dual-import.
+export type {
+  MemoChallengeMode,
+  MemoExplorer,
+  MemoVerifyErrorCode,
+  RecentMemo,
+  RecentOutput,
+};
+
+/** Free transparent default: 3xpl sandbox first, Blockchair public as fallback.
+ *  Reads THREEXPL_API_KEY / BLOCKCHAIR_API_KEY for the paid tiers if present. */
+function defaultTransparentExplorer(): MemoExplorer {
+  return new MultiExplorer([
+    new ThreeXplExplorer({ apiKey: process.env.THREEXPL_API_KEY }),
+    new BlockchairExplorer({ apiKey: process.env.BLOCKCHAIR_API_KEY }),
+  ]);
+}
 
 /** Default envelope: HMAC-SHA256(secret, "memo::" + identity), hex. */
 export function defaultMemoEnvelope(identity: string, secret: string): string {
@@ -20,6 +48,10 @@ export interface IssueMemoHandlerOptions {
   /** Treasury / service address. t1 for transparent-amount, zs/u1 for shielded-memo. */
   serviceAddress: string;
   network: Network;
+  /** Force a mode. Default: auto-detect from serviceAddress type. */
+  mode?: MemoChallengeMode;
+  /** Base ZEC amount (string). Default: 0.000001 (transparent) / 0.000001 (shielded dust). */
+  baseAmountZec?: string;
   /** ZIP 321 label shown by the wallet. Default: "Sign in". */
   label?: string;
   /** ZIP 321 message field. */
@@ -37,6 +69,19 @@ export interface IssueMemoHandlerOptions {
 export function issueMemoHandler(
   opts: IssueMemoHandlerOptions,
 ): (req: Request) => Promise<Response> {
+  if (!opts.secret || opts.secret.length < 16) {
+    throw new Error("issueMemoHandler: secret must be ≥ 16 characters");
+  }
+  if (!opts.serviceAddress) {
+    throw new Error("issueMemoHandler: serviceAddress is required");
+  }
+  try {
+    parseAddress(opts.serviceAddress);
+  } catch (err) {
+    throw new Error(
+      `issueMemoHandler: serviceAddress is not a valid Zcash address (${(err as Error).message})`,
+    );
+  }
   const ttlSeconds = opts.ttlSeconds ?? 600;
   return async (req: Request): Promise<Response> => {
     let body: unknown = {};
@@ -58,6 +103,8 @@ export function issueMemoHandler(
         secret: opts.secret,
         serviceAddress: opts.serviceAddress,
         network: opts.network,
+        mode: opts.mode,
+        baseAmountZec: opts.baseAmountZec,
         identity,
         label: opts.label ?? "Sign in",
         message: opts.message,
@@ -81,7 +128,10 @@ export function issueMemoHandler(
 
 export interface PollMemoHandlerOptions {
   secret: string;
-  explorer: MemoExplorer;
+  /** Transparent observations. Default: free MultiExplorer (3xpl + Blockchair). */
+  explorer?: MemoExplorer;
+  /** Shielded observations. No default; required if your service address is shielded. */
+  shieldedExplorer?: MemoExplorer;
   /** Recent outputs / memos scanned per poll. Default: 50. */
   scanLimit?: number;
   /** Override the envelope shape. Return `null` to omit. Default: defaultMemoEnvelope. */
@@ -93,7 +143,14 @@ export interface PollMemoHandlerOptions {
 export function pollMemoHandler(
   opts: PollMemoHandlerOptions,
 ): (req: Request) => Promise<Response> {
+  if (!opts.secret || opts.secret.length < 16) {
+    throw new Error("pollMemoHandler: secret must be ≥ 16 characters");
+  }
+  if (opts.scanLimit !== undefined && (opts.scanLimit < 1 || !Number.isInteger(opts.scanLimit))) {
+    throw new Error("pollMemoHandler: scanLimit must be a positive integer");
+  }
   const scanLimit = opts.scanLimit ?? 50;
+  const transparentExplorer = opts.explorer ?? defaultTransparentExplorer();
   return async (req: Request): Promise<Response> => {
     let body: { token?: unknown };
     try {
@@ -118,15 +175,15 @@ export function pollMemoHandler(
     }
 
     if (mode === "transparent-amount") {
-      if (!opts.explorer.getRecentOutputsToAddress) {
+      if (!transparentExplorer.getRecentOutputsToAddress) {
         return jsonError(
-          "Explorer does not implement getRecentOutputsToAddress; cannot serve transparent-amount sign-in",
+          "explorer does not implement getRecentOutputsToAddress",
           500,
         );
       }
       let outputs;
       try {
-        outputs = await opts.explorer.getRecentOutputsToAddress(recipient, scanLimit);
+        outputs = await transparentExplorer.getRecentOutputsToAddress(recipient, scanLimit);
       } catch (err) {
         return jsonError(`Explorer lookup failed: ${(err as Error).message}`, 502);
       }
@@ -154,15 +211,15 @@ export function pollMemoHandler(
       return Response.json({ ok: false, retryable: true }, { status: 202 });
     }
 
-    if (!opts.explorer.getRecentMemosToAddress) {
+    if (!opts.shieldedExplorer?.getRecentMemosToAddress) {
       return jsonError(
-        "Explorer does not implement getRecentMemosToAddress; cannot serve shielded-memo sign-in",
+        "shielded sign-in needs `shieldedExplorer` with getRecentMemosToAddress (e.g. apps/lightwallet-rpc)",
         500,
       );
     }
     let memos;
     try {
-      memos = await opts.explorer.getRecentMemosToAddress(recipient, scanLimit);
+      memos = await opts.shieldedExplorer.getRecentMemosToAddress(recipient, scanLimit);
     } catch (err) {
       return jsonError(`Explorer lookup failed: ${(err as Error).message}`, 502);
     }

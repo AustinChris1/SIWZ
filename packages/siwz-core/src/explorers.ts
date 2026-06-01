@@ -89,3 +89,114 @@ export class BlockchairExplorer implements MemoExplorer {
     }));
   }
 }
+
+export interface ThreeXplExplorerOptions {
+  /** Optional 3xpl API token. Without one, falls back to sandbox-api.3xpl.com
+   *  (anonymous, rate-limited, no uptime SLA). */
+  apiKey?: string;
+  /** Override the API base URL. */
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}
+
+interface ThreeXplEventsResponse {
+  data?: {
+    events?: {
+      "zcash-main"?: Array<{
+        block: number;
+        transaction: string;
+        time: string;
+        effect: string;
+        failed: boolean;
+      }>;
+    };
+  };
+}
+
+/** 3xpl-backed transparent-output explorer. Anonymous sandbox by default. */
+export class ThreeXplExplorer implements MemoExplorer {
+  private readonly apiKey?: string;
+  private readonly baseUrl: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(opts: ThreeXplExplorerOptions = {}) {
+    this.apiKey = opts.apiKey;
+    const defaultBase = opts.apiKey ? "https://api.3xpl.com" : "https://sandbox-api.3xpl.com";
+    this.baseUrl = (opts.baseUrl ?? defaultBase).replace(/\/$/, "");
+    const f = opts.fetch ?? (typeof fetch === "function" ? fetch : undefined);
+    if (!f) throw new ExplorerError("No global fetch() available; pass opts.fetch.");
+    this.fetchImpl = f;
+  }
+
+  async getRecentOutputsToAddress(address: string, limit = 10): Promise<RecentOutput[]> {
+    // 3xpl restricts `limit` to one of {1, 10, 100, 1000}.
+    const safeLimit = limit <= 1 ? 1 : limit <= 10 ? 10 : limit <= 100 ? 100 : 1000;
+    const url = new URL(`${this.baseUrl}/zcash/address/${encodeURIComponent(address)}`);
+    url.searchParams.set("data", "events");
+    url.searchParams.set("from", "zcash-main");
+    url.searchParams.set("limit", String(safeLimit));
+    if (this.apiKey) url.searchParams.set("token", this.apiKey);
+
+    const res = await this.fetchImpl(url.toString(), {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) {
+      throw new ExplorerError(`3xpl returned ${res.status}`, res.status);
+    }
+    const json = (await res.json()) as ThreeXplEventsResponse;
+    const events = json.data?.events?.["zcash-main"] ?? [];
+    // Keep incoming, confirmed events only. Effect is a signed-string zatoshi.
+    return events
+      .filter((e) => !e.failed && e.effect.startsWith("+"))
+      .map((e) => ({
+        txid: e.transaction,
+        address,
+        amountZatoshi: BigInt(e.effect.slice(1)),
+        blockHeight: e.block,
+        blockTime: Date.parse(e.time),
+      }));
+  }
+}
+
+/** Tries explorers in order; falls back to the next on any thrown error.
+ *  Use to chain a free public explorer with a private one for reliability. */
+export class MultiExplorer implements MemoExplorer {
+  constructor(private readonly explorers: MemoExplorer[]) {
+    if (!explorers.length) {
+      throw new ExplorerError("MultiExplorer needs at least one explorer.");
+    }
+  }
+
+  getRecentOutputsToAddress(address: string, limit?: number): Promise<RecentOutput[]> {
+    return this.tryEach("getRecentOutputsToAddress", (e) =>
+      e.getRecentOutputsToAddress?.(address, limit),
+    );
+  }
+
+  getRecentMemosToAddress(address: string, limit?: number): Promise<RecentMemo[]> {
+    return this.tryEach("getRecentMemosToAddress", (e) =>
+      e.getRecentMemosToAddress?.(address, limit),
+    );
+  }
+
+  private async tryEach<T>(
+    method: string,
+    call: (e: MemoExplorer) => Promise<T> | undefined,
+  ): Promise<T> {
+    const errors: string[] = [];
+    for (const explorer of this.explorers) {
+      const pending = call(explorer);
+      if (pending == null) continue;
+      try {
+        return await pending;
+      } catch (err) {
+        errors.push((err as Error).message);
+      }
+    }
+    throw new ExplorerError(
+      errors.length
+        ? `All explorers failed at ${method}: ${errors.join("; ")}`
+        : `No explorer implements ${method}`,
+    );
+  }
+}

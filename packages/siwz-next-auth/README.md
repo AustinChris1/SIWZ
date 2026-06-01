@@ -19,34 +19,62 @@ Peer-deps: `next-auth >= 4`.
 ```ts
 // app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { SiwzProvider } from "@siwz/next-auth";
-
-const siwz = SiwzProvider({
-  expectedDomain: "myapp.com",          // MUST match what the browser sees
-  secret: process.env.NEXTAUTH_SECRET!, // also signs the nonce tokens
-});
+import { SiwzProvider, SiwzMemoProvider } from "@siwz/next-auth";
 
 const handler = NextAuth({
-  providers: [CredentialsProvider(siwz as any)],
+  providers: [
+    SiwzProvider({
+      expectedDomain: "myapp.com",          // MUST match what the browser sees
+      secret: process.env.NEXTAUTH_SECRET!, // also signs the nonce tokens
+    }),
+    SiwzMemoProvider({ secret: process.env.NEXTAUTH_SECRET! }),
+  ],
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.address = (user as any).id;
-        token.network = (user as any).network;
+        token.address = user.id;
+        token.network = user.network;
       }
       return token;
     },
     async session({ session, token }) {
-      (session.user as any).address = token.address;
-      (session.user as any).network = token.network;
+      session.user.address = token.address;
+      session.user.network = token.network;
       return session;
     },
   },
 });
 
 export { handler as GET, handler as POST };
+```
+
+Both providers return a typed `CredentialsConfig`, so they can be passed directly into the `providers` array. No `as any` casts.
+
+### Typing the extra user fields
+
+`SiwzProvider` attaches `addressType` and `network` to the resolved user. To type them in your callbacks, augment NextAuth's `User`/`Session`/`JWT` interfaces in a single d.ts file:
+
+```ts
+// types/next-auth.d.ts
+import "next-auth";
+import "next-auth/jwt";
+
+declare module "next-auth" {
+  interface User {
+    addressType?: string;
+    network?: string;
+  }
+  interface Session {
+    user: { address?: string; network?: string } & Session["user"];
+  }
+}
+declare module "next-auth/jwt" {
+  interface JWT {
+    address?: string;
+    network?: string;
+  }
+}
 ```
 
 ## Nonce endpoint
@@ -93,15 +121,13 @@ export const POST = issueMemoHandler({
 ```ts
 // app/api/auth/memo/poll/route.ts
 import { pollMemoHandler } from "@siwz/next-auth/memo";
-import { BlockchairExplorer } from "@siwz/core/explorers";
 
 export const POST = pollMemoHandler({
   secret: process.env.NEXTAUTH_SECRET!,
-  explorer: new BlockchairExplorer(),
 });
 ```
 
-That's the entire server. `<MemoSignIn />` posts to these routes by default, so the client side is just `<MemoSignIn onSuccess={…} />`.
+That's the entire server for a transparent sign-in. No explorer wiring. The default is a free `MultiExplorer` chaining `ThreeXplExplorer` (3xpl sandbox, anonymous) and `BlockchairExplorer` (public tier). Set `THREEXPL_API_KEY` or `BLOCKCHAIR_API_KEY` env vars to use the paid tiers if you need higher throughput. `<MemoSignIn />` posts to these routes by default, so the client is just `<MemoSignIn onSuccess={…} />`.
 
 ### Wire convention
 
@@ -117,20 +143,25 @@ If you write a custom poll handler, mirror this. Returning 4xx for "not yet matc
 
 ### Shielded-memo sign-in
 
-`BlockchairExplorer` only indexes the public chain. For shielded-memo (the `zs…`/`u1…` service-address case), implement the `MemoExplorer` interface against a backend that holds the IVK and pass that instead:
+Public explorers can't decrypt memos. For shielded-memo (the `zs…`/`u1…` service-address case), pass a `shieldedExplorer` backed by an IVK-holding backend (apps/lightwallet-rpc, zcashd RPC, zaino):
 
 ```ts
 import type { MemoExplorer } from "@siwz/core";
 
-const zingoExplorer: MemoExplorer = {
+const shieldedExplorer: MemoExplorer = {
   async getRecentMemosToAddress(address, limit) {
     // call your lightwallet-rpc / zcashd / zaino wrapper
     return [{ txid: "...", memo: "SIWZ:abc123", amountZatoshi: 100n }];
   },
 };
+
+export const POST = pollMemoHandler({
+  secret: process.env.NEXTAUTH_SECRET!,
+  shieldedExplorer,
+});
 ```
 
-`pollMemoHandler` dispatches by the address type encoded in the issue token, so the same route serves both flows depending on what `serviceAddress` was set to.
+`pollMemoHandler` dispatches by the address type encoded in the issue token, so the same route serves both flows. Transparent keeps using the free default; shielded uses your custom backend.
 
 ### Identity continuity
 
@@ -176,24 +207,21 @@ SiwzProvider({
 
 ## Auth.js v5
 
-The same `SiwzProvider(...)` config object is consumed by Auth.js v5's `Credentials(...)` provider. Only the import line changes:
-
-```ts
-import Credentials from "next-auth/providers/credentials";
-const handler = NextAuth({ providers: [Credentials(siwz as any)], /* ... */ });
-```
+The same `SiwzProvider(...)` / `SiwzMemoProvider(...)` config objects work with Auth.js v5. Drop them directly into the `providers` array; no wrapper or cast needed.
 
 ## API surface
 
 ```ts
-SiwzProvider(opts)
-  // opts: SiwzProviderOptions = { expectedDomain, secret, id?, saplingVerifier? }
+SiwzProvider(opts)        // signed-message NextAuth provider
+SiwzMemoProvider(opts)    // memo-challenge NextAuth provider
 
 issueNonce({ secret, ttlSeconds? })            // -> { nonce, token, expiresAt }
 verifyNonceToken(token, { secret })            // -> { ok: true, nonce } | { ok: false, error }
+defaultMemoEnvelope(identity, secret)          // hex HMAC, the default envelope shape
 
 // Types
-type SiwzProviderOptions, SiwzCredentials, SiwzUser
+type SiwzProviderOptions, SiwzMemoProviderOptions
+type SiwzCredentials, SiwzUser
 type NonceTokenOptions, IssuedNonce, VerifyNonceResult
 ```
 
@@ -201,9 +229,12 @@ type NonceTokenOptions, IssuedNonce, VerifyNonceResult
 // Subpath: @siwz/next-auth/memo
 issueMemoHandler(opts)                         // -> (req: Request) => Promise<Response>
 pollMemoHandler(opts)                          // -> (req: Request) => Promise<Response>
+defaultMemoEnvelope(identity, secret)          // re-exported from the root for convenience
 
-// Types
+// Types (re-exported from @siwz/core for ergonomic single-import setups)
 type IssueMemoHandlerOptions, PollMemoHandlerOptions
+type MemoExplorer, RecentOutput, RecentMemo
+type MemoChallengeMode, MemoVerifyErrorCode
 ```
 
 ## Related packages

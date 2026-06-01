@@ -15,15 +15,26 @@ The memo-challenge approach pivots to what Zcash actually does well: shielded tr
 1. **App issues a challenge.** Server generates a unique-amount challenge encoded in a [ZIP 321](https://zips.z.cash/zip-0321) payment-request URI. The amount carries entropy in its least-significant zatoshi digits, random per attempt.
 2. **App displays a QR + `zcash:` deep link.** Wallets that support ZIP 321 (Zodl, YWallet, Zingo, eZcash, Zenith, …) open with the transaction pre-filled when the user scans/clicks.
 3. **User sends the payment** from whichever wallet they want to authenticate as. The send is a regular shielded payment, with no special UI needed in the wallet.
-4. **App verifies the tx.** The server (or the user, via paste-txid) looks up the tx on a public block explorer and confirms one of its transparent outputs pays the expected `(serviceAddress, amount)` pair. A match means the user is authenticated.
+4. **App verifies the tx.** The server polls a block explorer (the default `MultiExplorer` tries 3xpl then Blockchair) for recent outputs to the service address and matches each amount against the issued token. A match means the user is authenticated.
+
+The SDK ships all four steps for you:
+
+- `<MemoSignIn />` from `@siwz/react` handles steps 1-2 client-side (QR rendering, polling, success callback).
+- `issueMemoHandler` from `@siwz/next-auth/memo` handles step 1 server-side.
+- `pollMemoHandler` from `@siwz/next-auth/memo` handles step 4 server-side, with a free transparent explorer by default.
+- `SiwzMemoProvider` from `@siwz/next-auth` verifies the resulting envelope inside NextAuth.
+
+Apps that need different defaults can override at each layer. See [integration.md](./integration.md).
 
 ## Wire format
 
 The ZIP 321 URI we generate:
 
 ```
-zcash:t1QzwK7oMTdr4XF32s5RAtK9Eq45NFtdSbo?amount=0.06448145&label=ZBooks&message=Sign+in+to+ZBooks
+zcash:t1QzwK7oMTdr4XF32s5RAtK9Eq45NFtdSbo?amount=0.00000582&label=ZBooks&message=Sign+in+to+ZBooks
 ```
+
+The amount is `base + nonce` zatoshi where `base` defaults to 100 zatoshi (`0.000001 ZEC`) and `nonce` is a random 0-999. Total range: 100-1099 zatoshi (`0.000001`-`0.00001099 ZEC`). The base is configurable via `baseAmountZec` in `IssueMemoHandlerOptions` / `IssueMemoChallengeOpts`.
 
 The challenge token (HMAC-signed; round-trips between client and server statelessly):
 
@@ -47,7 +58,7 @@ The verifier looks up the txid via the configured `Explorer` implementation, ite
 | Proves spending key ownership? | No, proves *spend authority over some ZEC* | Yes (cryptographic signature) | No, MetaMask approval grant |
 | Wallet support today | **100%** (every shielded wallet) | <20% (zcash-cli, YWallet) | 1 wallet (when allowlist permits) |
 | Privacy of the auth itself | High (shielded tx, sender hidden) | Low (transparent address & key on the wire) | High (MetaMask-mediated) |
-| Cost to the user | One tx fee (~0.00001 ZEC) | Free | Free |
+| Cost to the user | Dust + tx fee (~0.000001 to 0.00001 ZEC dust, plus ZIP 317 fee) | Free | Free |
 | Latency | ~5-15s (block confirm) | Instant | Instant |
 | Sybil resistance | High (real ZEC required) | None | None |
 
@@ -61,7 +72,7 @@ To bind a *specific* identity to the session, the app supplies the identity (e.g
 
 Memo-challenge cryptographically proves **someone with spend authority over some ZEC sent a payment with this nonce in the memo**. It does *not* tell the verifier *who* the sender is; that's the whole point of shielded sends. So SIWZ has to make a UX choice: what identity gets bound to the resulting session?
 
-ZBooks's `MemoSignIn` exposes two modes via the `/api/auth/memo/issue` request body:
+ZBooks's `MemoSignIn` (a customized fork of the published `<MemoSignIn />`) exposes two modes via the `/api/auth/memo/issue` request body:
 
 - **Default: anonymous, device-persistent.** No special input. The server generates an opaque `anon:<random-hex>` identity and the client stores it in `localStorage` under `siwz.zbooks.previous_anon_id`. On subsequent sign-ins from the same browser, the client sends `{ previousAnonId }`; the server validates the shape (`/^anon:[0-9a-f]{8,128}$/`) and reuses it as the identity. Result: the same browser gets the same anon account, while a different browser or wiped localStorage gets a fresh anon account.
 
@@ -101,7 +112,7 @@ For browser-side WebZjs use cases, ChainSafe also operates a gRPC-Web proxy at `
 
 **Shielded (`zs…`, `u1…`), implemented.**
 - Privacy-maximalist option: the service address never appears on-chain in a publicly-decryptable form. Memo + amount are encrypted to the receiver.
-- ZBooks's `ZcashRpcExplorer` (in `apps/demo/src/lib/explorer.ts`) speaks the standard Zcash wallet RPC (`z_listreceivedbyaddress`) over either HTTP or `zcash-cli` to fetch decrypted memos. The challenge is encoded in the memo as `SIWZ:<nonce>`; the amount stays at a fixed dust value (0.00001 ZEC) since it no longer needs to carry the nonce.
+- ZBooks's `ZcashRpcExplorer` (in `apps/demo/src/lib/explorer.ts`) speaks the standard Zcash wallet RPC (`z_listreceivedbyaddress`) over either HTTP or `zcash-cli` to fetch decrypted memos. The challenge is encoded in the memo as `SIWZ:<nonce>`; the amount stays at a fixed dust value (0.000001 ZEC) since it no longer needs to carry the nonce.
 - Setup:
   1. Generate or pick a shielded address inside your Zcash daemon's wallet:
      ```bash
@@ -128,9 +139,9 @@ For browser-side WebZjs use cases, ChainSafe also operates a gRPC-Web proxy at `
 
 ### Why amount-encoded nonces and not memos?
 
-A transparent service address can't see memos (memos are a shielded-only construct). To carry the per-attempt entropy on a transparent service address we encode the nonce in the *amount*: the random 24-bit suffix gives ~16M concurrent challenges before collision becomes notable, well above any realistic concurrent-sign-in rate.
+A transparent service address can't see memos (memos are a shielded-only construct). To carry the per-attempt entropy on a transparent service address we encode the nonce in the *amount*: the random 0-999 zatoshi suffix gives 1000 distinct nonces per `baseAmountZec` setting. For a hackathon-scale deployment with low concurrent sign-in volume that's plenty; for a larger deployment, widen the range by raising `baseAmountZec` or accepting a wider nonce span (the protocol-level cap is 32 bits).
 
-If you migrate to a shielded service address, the memo can carry the nonce directly and the amount can be fixed (e.g. dust). The `@siwz/core` `issueMemoChallenge` API is shaped to support both; only the `Explorer` implementation needs to change.
+If you migrate to a shielded service address, the memo carries a 12-character random alphanumeric nonce (~70 bits) directly and the amount stays at a fixed dust value. The `@siwz/core` `issueMemoChallenge` API is shaped to support both; only the explorer implementation needs to change.
 
 ### Replay & one-shot semantics
 

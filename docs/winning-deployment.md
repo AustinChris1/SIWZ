@@ -110,7 +110,7 @@ Redeploy. The `getShieldedExplorer()` dispatcher in [`apps/demo/src/lib/explorer
 
 1. User opens ZBooks at `https://zbooks.your-domain.com`.
 2. User clicks "Sign in with Zcash".
-3. ZBooks issues a memo-challenge. UI renders a QR encoding `zcash:zs1...?amount=0.00001&memo=U0lXWjpAYmNkZWY...` (base64url of `SIWZ:abcdef…`).
+3. ZBooks issues a memo-challenge. UI renders a QR encoding `zcash:zs1...?amount=0.000001&memo=U0lXWjpAYmNkZWY...` (base64url of `SIWZ:abcdef…`).
 4. User scans the QR with Zodl / YWallet / Zingo. Wallet opens with the tx pre-filled.
 5. User confirms. The shielded tx broadcasts.
 6. Usually within 5 to 15 seconds, `lightwalletd` includes the block. `zingo-cli` on the VPS decrypts the note with your IVK. The memo `SIWZ:abcdef…` becomes visible to `zingo-cli list`.

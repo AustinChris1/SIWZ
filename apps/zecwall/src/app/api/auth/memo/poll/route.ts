@@ -1,44 +1,32 @@
 import { NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
 import { pollMemoHandler } from "@siwz/next-auth/memo";
-import { BlockchairExplorer } from "@siwz/core/explorers";
-import {
-  verifyMemoChallenge,
-  type MemoExplorer,
-  type RecentMemo,
-} from "@siwz/core";
+import { verifyMemoChallenge, type MemoExplorer, type RecentMemo } from "@siwz/core";
 
 export const dynamic = "force-dynamic";
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? "";
 
-// Blockchair for transparent, lightwallet-rpc for shielded.
-const explorer: MemoExplorer = {
-  getRecentOutputsToAddress: (address, limit) =>
-    new BlockchairExplorer().getRecentOutputsToAddress(address, limit),
-  async getRecentMemosToAddress(address, limit) {
-    const url = process.env.LIGHTWALLET_RPC_URL;
-    const lwToken = process.env.LIGHTWALLET_RPC_TOKEN;
-    if (!url || !lwToken) {
-      throw new Error(
-        "Shielded sign-in needs LIGHTWALLET_RPC_URL + LIGHTWALLET_RPC_TOKEN. See apps/lightwallet-rpc.",
-      );
-    }
-    const res = await fetch(`${url.replace(/\/$/, "")}/memos`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${lwToken}`,
-      },
-      body: JSON.stringify({ address, limit: limit ?? 50 }),
-    });
-    if (!res.ok) throw new Error(`lightwallet-rpc /memos returned ${res.status}`);
-    const json = (await res.json()) as { memos?: RecentMemo[] };
-    return json.memos ?? [];
-  },
-};
+// Transparent is the default; only wire shielded when LIGHTWALLET_RPC_* is set.
+const shieldedExplorer: MemoExplorer | undefined =
+  process.env.LIGHTWALLET_RPC_URL && process.env.LIGHTWALLET_RPC_TOKEN
+    ? { getRecentMemosToAddress: fetchLightwalletMemos }
+    : undefined;
 
-const handler = pollMemoHandler({ secret: SECRET, explorer });
+const handler = pollMemoHandler({ secret: SECRET, shieldedExplorer });
+
+async function fetchLightwalletMemos(address: string, limit?: number): Promise<RecentMemo[]> {
+  const url = process.env.LIGHTWALLET_RPC_URL!;
+  const lwToken = process.env.LIGHTWALLET_RPC_TOKEN!;
+  const res = await fetch(`${url.replace(/\/$/, "")}/memos`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${lwToken}` },
+    body: JSON.stringify({ address, limit: limit ?? 50 }),
+  });
+  if (!res.ok) throw new Error(`lightwallet-rpc /memos returned ${res.status}`);
+  const json = (await res.json()) as { memos?: RecentMemo[] };
+  return json.memos ?? [];
+}
 
 export async function POST(req: Request) {
   if (process.env.SIWZ_DEMO === "1") return demoMatch(req);

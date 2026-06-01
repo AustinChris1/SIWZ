@@ -38,7 +38,7 @@ import { signIn } from "next-auth/react";
 
 <MemoSignIn
   onSuccess={async ({ identity, envelope, txid }) => {
-    await signIn("siwz-memo", { identity, envelope, txid, redirect: false });
+    await signIn("memo", { identity, envelope, redirect: false });
   }}
   onError={(msg) => console.error("[siwz]", msg)}
 />

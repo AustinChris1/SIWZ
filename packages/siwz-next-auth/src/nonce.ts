@@ -5,10 +5,16 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * Format: base64url(nonce) "." base64url(expiryMs) "." base64url(hmac).
  */
 export interface NonceTokenOptions {
-  /** Symmetric secret. ≥ 32 bytes. Typically reuse NEXTAUTH_SECRET. */
+  /** Symmetric secret. ≥ 16 chars (32+ recommended). Typically reuse NEXTAUTH_SECRET. */
   secret: string;
   /** Lifetime in seconds. Default: 600 (10 min). */
   ttlSeconds?: number;
+}
+
+function requireSecret(secret: string, where: string): void {
+  if (!secret || secret.length < 16) {
+    throw new Error(`${where}: secret must be ≥ 16 characters`);
+  }
 }
 
 const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -44,6 +50,7 @@ export interface IssuedNonce {
 }
 
 export function issueNonce(opts: NonceTokenOptions): IssuedNonce {
+  requireSecret(opts.secret, "issueNonce");
   const ttl = (opts.ttlSeconds ?? 600) * 1000;
   const nonce = randomNonce();
   const expiresAtMs = Date.now() + ttl;
@@ -63,6 +70,7 @@ export interface VerifyNonceResult {
 }
 
 export function verifyNonceToken(token: string, opts: NonceTokenOptions): VerifyNonceResult {
+  requireSecret(opts.secret, "verifyNonceToken");
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, error: "MALFORMED" };
   const [nonceB64, expB64, sig] = parts as [string, string, string];

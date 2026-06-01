@@ -51,10 +51,10 @@ Two options:
 
 ```bash
 # Use the URI directly if your build has a uri-sender command:
-zcash-cli pay "zcash:<address>?amount=0.00010163&memo=U0lXWjphYmMxMjM"
+zcash-cli pay "zcash:<address>?amount=0.00000582&memo=U0lXWjphYmMxMjM"
 
 # Or just paste the bits manually:
-zcash-cli z_sendmany "<from_zaddr>" '[{"address":"<service_addr>","amount":0.00010163,"memo":"53495757-3A-abc123…"}]'
+zcash-cli z_sendmany "<from_zaddr>" '[{"address":"<service_addr>","amount":0.00000582,"memo":"53495757-3A-abc123…"}]'
 # (memo is hex-encoded for z_sendmany)
 ```
 
