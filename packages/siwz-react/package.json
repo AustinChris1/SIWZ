@@ -1,6 +1,6 @@
 {
   "name": "@siwz/react",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Sign in with Zcash — drop-in React component & hook",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,13 +25,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@siwz/core": "workspace:*"
+    "@siwz/core": "workspace:*",
+    "qrcode": "^1.5.4"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "react": "^18.3.1",

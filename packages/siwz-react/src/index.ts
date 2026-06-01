@@ -2,6 +2,12 @@ export { SignInWithZcash } from "./SignInWithZcash.js";
 export type { SignInWithZcashProps } from "./SignInWithZcash.js";
 export { useSiwz } from "./useSiwz.js";
 export type { UseSiwzOptions, UseSiwzReturn, SiwzStatus } from "./useSiwz.js";
+export { MemoSignIn } from "./MemoSignIn.js";
+export type {
+  MemoSignInProps,
+  MemoChallengeData,
+  MemoPollResult,
+} from "./MemoSignIn.js";
 export {
   detectSnapEnvironment,
   requestSnapInstall,

@@ -53,3 +53,5 @@ export type {
   VerifyMemoChallengeResult,
 } from "./memo-challenge.js";
 export { ZCASH_BLOCKS, type ZcashBlockName } from "./zcash-blocks.js";
+// Types re-exported at root; runtime BlockchairExplorer stays at @siwz/core/explorers.
+export type { MemoExplorer, RecentOutput, RecentMemo } from "./explorers.js";

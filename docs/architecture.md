@@ -72,6 +72,27 @@ wallet; ZBooks then watches the treasury UFVK and reconciles the outgoing tx bac
 to each payout line. Custodial sending was considered and rejected; PCZT
 one-click signing is roadmap. Full design in [`zbooks-payouts.md`](./zbooks-payouts.md).
 
+## ZBooks data layer: encryption-at-rest and recovery
+
+The ZBooks reference app stores its UFVKs and ledger in Turso (libSQL over
+HTTPS). The non-protocol hardening layered on top:
+
+- **UFVKs are encrypted at rest** with AES-256-GCM, key derived from
+  `NEXTAUTH_SECRET` via HKDF-SHA256. A leaked Turso auth token alone does not
+  leak any viewing keys; the encryption key has to be compromised separately.
+- **Key mutation is owner-gated.** Treasurers can only rename or delete keys
+  they added; admins keep full authority.
+- **`/api/auth/memo/issue` and `/poll` are rate-limited per IP** in process
+  (20/min and 90/min respectively). Not a fortress on multi-instance Vercel,
+  but raises the cost of a single noisy attacker meaningfully.
+- **Sync recovery.** Any UFVK row left stuck on `sync_status = 'syncing'` by a
+  crashed process is reset to `idle` on the next DB initialisation, and the
+  in-memory sync lock expires after 10 minutes so a process never blocks its
+  own retries indefinitely.
+
+Full descriptions, ciphertext format, and rotation guidance in
+[`security.md`](./security.md#zbooks-application-layer-hardening).
+
 ## Stateless nonces
 
 Both flows need replay protection. The classic approach is to store `(nonce, expiresAt)` server-side and check against the store on verify. That works but breaks under serverless (no shared state) and adds a dependency (Redis / DB).

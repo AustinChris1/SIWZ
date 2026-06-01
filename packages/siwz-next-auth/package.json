@@ -1,6 +1,6 @@
 {
   "name": "@siwz/next-auth",
-  "version": "0.1.2",
+  "version": "0.2.1",
   "description": "Sign in with Zcash — NextAuth.js v4 / Auth.js v5 credentials provider",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,6 +16,11 @@
       "types": "./dist/nonce.d.ts",
       "import": "./dist/nonce.js",
       "require": "./dist/nonce.cjs"
+    },
+    "./memo": {
+      "types": "./dist/memo.d.ts",
+      "import": "./dist/memo.js",
+      "require": "./dist/memo.cjs"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

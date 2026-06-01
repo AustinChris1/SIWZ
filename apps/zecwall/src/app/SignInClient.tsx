@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { SignInWithZcash, type SnapIdentity } from "@siwz/react";
+import { useState } from "react";
+import { MemoSignIn, SignInWithZcash, type SnapIdentity } from "@siwz/react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -110,107 +110,28 @@ function SnapFlow({ onUseDifferentWallet }: { onUseDifferentWallet: () => void }
   );
 }
 
-interface Challenge {
-  uri: string;
-  amountZec: string;
-  serviceAddress: string;
-  memo?: string;
-  token: string;
-  mode: "transparent-amount" | "shielded-memo";
-  demoMode?: boolean;
-}
-
 function MemoFlow() {
   const router = useRouter();
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [issuing, setIssuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signedIn, setSignedIn] = useState(false);
-  const pollingRef = useRef(false);
-
-  const begin = async () => {
-    setError(null);
-    setIssuing(true);
-    try {
-      const res = await fetch("/api/auth/memo/issue", { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-      setChallenge(await res.json());
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setIssuing(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!challenge || signedIn) return;
-    pollingRef.current = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const tick = async () => {
-      if (!pollingRef.current) return;
-      try {
-        const res = await fetch("/api/auth/memo/poll", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: challenge.token }),
-        });
-        if (res.status === 200) {
-          const { identity, envelope } = await res.json();
-          pollingRef.current = false;
-          setSignedIn(true);
-          const r = await signIn("memo", { identity, envelope, redirect: false });
-          if (!r?.ok) { setError(r?.error ?? "memo sign-in rejected"); setSignedIn(false); return; }
-          router.refresh();
-          return;
-        }
-        if (res.status >= 400 && res.status !== 404 && res.status !== 202) {
-          setError((await res.json()).error ?? `HTTP ${res.status}`);
-          pollingRef.current = false;
-          return;
-        }
-      } catch (e) { console.warn(e); }
-      if (pollingRef.current) timer = setTimeout(tick, 6_000);
-    };
-    timer = setTimeout(tick, 1_500);
-    return () => { pollingRef.current = false; if (timer) clearTimeout(timer); };
-  }, [challenge, signedIn, router]);
-
-  if (!challenge) {
-    return (
-      <div className="card">
-        <p className="opacity-80 text-sm">
-          Sign in by sending a tiny shielded payment from any Zcash wallet. The
-          unique amount or memo proves you control the wallet. No password, no custody.
-        </p>
-        <button className="btn" onClick={begin} disabled={issuing}>
-          {issuing ? "Preparing…" : "Sign in with Zcash"}
-        </button>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-      </div>
-    );
-  }
-
   return (
     <div className="card flex flex-col gap-3">
-      <img
-        src={`/api/auth/memo/qr?uri=${encodeURIComponent(challenge.uri)}`}
-        width={200}
-        height={200}
-        alt="Zcash payment QR"
-        className="self-center bg-white rounded"
+      <p className="opacity-80 text-sm">
+        Sign in by sending a tiny payment from any Zcash wallet. The unique
+        amount or memo proves you control the wallet. No password, no custody.
+      </p>
+      <MemoSignIn
+        buttonLabel="Sign in with Zcash"
+        onSuccess={async ({ identity, envelope }) => {
+          if (!identity || !envelope) {
+            setError("server response missing identity or envelope");
+            return;
+          }
+          const r = await signIn("memo", { identity, envelope, redirect: false });
+          if (!r?.ok) setError(r?.error ?? "memo sign-in rejected");
+          else router.refresh();
+        }}
+        onError={(msg) => setError(msg)}
       />
-      <div className="text-sm">
-        <div><strong>Send:</strong> <code>{challenge.amountZec}</code> ZEC</div>
-        <div className="break-all"><strong>To:</strong> <code>{challenge.serviceAddress}</code></div>
-        {challenge.memo && <div className="break-all"><strong>Memo:</strong> <code>{challenge.memo}</code></div>}
-      </div>
-      <a href={challenge.uri} className="underline text-sm">Open in wallet →</a>
-      {challenge.demoMode && (
-        <div className="text-xs opacity-70">
-          DEMO mode: the poll endpoint auto-matches without an actual on-chain tx.
-        </div>
-      )}
-      {signedIn ? <p className="text-emerald-600 text-sm">Signing in…</p> : <p className="opacity-60 text-sm">Polling… (usually 5 to 15s after wallet send)</p>}
       {error && <p className="text-red-600 text-sm">{error}</p>}
     </div>
   );

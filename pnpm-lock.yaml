@@ -195,7 +195,13 @@ importers:
       '@siwz/core':
         specifier: workspace:*
         version: link:../siwz-core
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
     devDependencies:
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.6
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.29

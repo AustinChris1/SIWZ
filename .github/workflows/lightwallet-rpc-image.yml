@@ -1,0 +1,98 @@
+# Build and publish the apps/lightwallet-rpc Docker image to GitHub Container Registry.
+#
+# Triggers:
+#   - push to main, but only when files under apps/lightwallet-rpc/** or this
+#     workflow itself change. Keeps unrelated commits from re-running the
+#     expensive Rust build of zingo-cli.
+#   - workflow_dispatch so a maintainer can force a rebuild from the Actions tab.
+#   - release (published) so cutting a GitHub Release produces a versioned image
+#     tagged with the semver of the release.
+#
+# Image: ghcr.io/<owner>/siwz-lightwallet-rpc
+# Auth:  the built-in GITHUB_TOKEN (no PAT needed) thanks to packages:write.
+# Cache: GitHub Actions cache (type=gha,mode=max) so the cargo build of
+#        zingolib is reused across runs. The first run from a cold cache is
+#        slow (see notes); subsequent runs reuse the Rust layer.
+
+name: lightwallet-rpc image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/lightwallet-rpc/**"
+      - ".github/workflows/lightwallet-rpc-image.yml"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/siwz-lightwallet-rpc
+
+jobs:
+  build-and-push:
+    name: Build and push multi-arch image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        # Required so the linux/arm64 build can run under emulation on the
+        # amd64 GitHub-hosted runner.
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tagging rules:
+          #   - latest only on the default branch
+          #   - {{version}} from semver release tags (v1.2.3 -> 1.2.3)
+          #   - sha-<short> on every push for traceability
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/lightwallet-rpc
+          file: ./apps/lightwallet-rpc/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

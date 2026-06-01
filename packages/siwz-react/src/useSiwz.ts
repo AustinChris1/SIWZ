@@ -1,16 +1,17 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  SiwzMessage,
-  isZcashAddress,
-  type Network,
-  type VerifyResult,
-} from "@siwz/core";
+import { SiwzMessage, isZcashAddress } from "@siwz/core";
 import {
   detectSnapEnvironment,
   snapConnect,
   type SnapIdentity,
   type SnapStatus,
 } from "./snap.js";
+
+// Locally mirror @siwz/core's Network so the emitted .d.ts is self-contained.
+// Without this, consumers building under pnpm + Next.js
+// "moduleResolution": "bundler" can lose the cross-package type and see it
+// collapse to `undefined`. Keep in sync with @siwz/core/src/types.ts.
+export type Network = "mainnet" | "testnet" | "regtest";
 
 /** Linear states the sign-in flow walks through. */
 export type SiwzStatus =
@@ -194,4 +195,4 @@ export function useSiwz(opts: UseSiwzOptions): UseSiwzReturn {
   };
 }
 
-export type { VerifyResult, SnapStatus, SnapIdentity };
+export type { SnapStatus, SnapIdentity };

@@ -1,5 +1,25 @@
-import { SiwzMessage, verifyMessage, type VerifyOptions } from "@siwz/core";
+import { SiwzMessage, verifyMessage } from "@siwz/core";
 import { verifyNonceToken } from "./nonce.js";
+
+// Local mirror of @siwz/core's saplingVerifier callback shape so the emitted
+// .d.ts stays self-contained. Without this, consumers building under pnpm +
+// Next.js "moduleResolution": "bundler" can lose the cross-package
+// VerifyOptions index access. Structurally identical to
+// VerifyOptions["saplingVerifier"] in @siwz/core; keep in sync.
+type LocalAddressType = "p2pkh" | "p2sh" | "sapling" | "orchard" | "unified";
+type LocalNetwork = "mainnet" | "testnet" | "regtest";
+interface LocalParsedAddress {
+  raw: string;
+  type: LocalAddressType;
+  network: LocalNetwork;
+  hash?: Uint8Array;
+  receivers?: LocalParsedAddress[];
+}
+export type SiwzSaplingVerifier = (args: {
+  message: string;
+  signature: Uint8Array;
+  address: LocalParsedAddress;
+}) => Promise<boolean>;
 
 /** Credential payload posted by @siwz/react to NextAuth's credentials endpoint. */
 export interface SiwzCredentials {
@@ -29,7 +49,7 @@ export interface SiwzProviderOptions {
   /** Override the credentials provider ID. Default "siwz". */
   id?: string;
   /** ZIP 304 Sapling verifier. Required for z-addr sign-in. */
-  saplingVerifier?: VerifyOptions["saplingVerifier"];
+  saplingVerifier?: SiwzSaplingVerifier;
 }
 
 /**

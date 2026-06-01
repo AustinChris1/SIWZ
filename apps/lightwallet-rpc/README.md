@@ -6,6 +6,49 @@ Tiny HTTPS wrapper around `zingo-cli`. Runs on a small VPS so that ZBooks (or an
 **Single file: [`src/server.mjs`](src/server.mjs).**
 **No npm install. No build step. Boots in 2 seconds.**
 
+## Quickstart with Docker (recommended)
+
+Docker is the fastest way to get this running on any host (Linux VPS, Mac, Cloud Run job). The image bundles a freshly-compiled `zingo-cli`, so the only thing you need on the host is Docker itself.
+
+```bash
+# 1. Generate a strong bearer token. Save the output securely.
+TOKEN=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")
+
+# 2. Build the image (first build is ~10 min for the zingo-cli Rust compile;
+#    later builds reuse the cached layer).
+docker build -t siwz-lightwallet-rpc .
+
+# 3. Run it.
+docker run -d \
+  --name siwz-lightwallet-rpc \
+  --restart unless-stopped \
+  -p 18232:18232 \
+  -e LIGHTWALLET_RPC_TOKEN="$TOKEN" \
+  -v siwz-zingo:/home/siwz/.zingo-ufvks \
+  siwz-lightwallet-rpc
+
+# 4. Confirm.
+curl http://localhost:18232/health
+```
+
+Or with docker-compose:
+
+```bash
+echo "LIGHTWALLET_RPC_TOKEN=$TOKEN" > .env
+docker compose up -d
+docker compose logs -f
+```
+
+In your SIWZ-using app's `.env`, point at the wrapper:
+
+```env
+LIGHTWALLET_RPC_URL=http://your-host:18232
+LIGHTWALLET_RPC_TOKEN=<same token from step 1>
+SIWZ_SERVICE_ADDRESS=<your zs.../u1... shielded address>
+```
+
+For internet-facing deployments, terminate TLS in front of this with nginx or another reverse proxy. The wrapper is HTTP-only by design; TLS is the proxy's job.
+
 ## What it exposes
 
 ```
@@ -17,7 +60,11 @@ POST /memos                  Authorization: Bearer <LIGHTWALLET_RPC_TOKEN>
 
 That's it. Two endpoints. The `/memos` endpoint shells out to `zingo-cli`, parses its JSON output, returns the decrypted memos for incoming notes at the requested z-addr.
 
-## Deploy
+## Deploy without Docker (metal VPS)
+
+The legacy install path. Use this only if you want full control of the host
+(systemd unit, nginx, certbot all by hand). For most cases, the Docker route
+above is simpler.
 
 See [`docs/winning-deployment.md`](../../docs/winning-deployment.md) for the full 15-minute walkthrough. Short version:
 
@@ -26,7 +73,7 @@ See [`docs/winning-deployment.md`](../../docs/winning-deployment.md) for the ful
 sudo apt update && sudo apt install -y nodejs git nginx certbot python3-certbot-nginx
 
 # 1. Get zingo-cli (precompiled or `cargo install`). Init a lite wallet.
-zingo-cli --server https://mainnet.lightwalletd.com:9067
+zingo-cli --server https://zec.rocks:443
 # inside: `new`, save the seed, `addresses`, copy the z-addr or UA, `quit`.
 
 # 2. Clone SWZ, run the wrapper.

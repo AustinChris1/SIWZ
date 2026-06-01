@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "./providers";
 import "./globals.css";
+import "@siwz/react/styles.css";
 
 export const metadata: Metadata = {
   title: "ZecWall: a Zcash-gated comments wall built on Sign in with Zcash",

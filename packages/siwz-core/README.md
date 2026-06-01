@@ -53,6 +53,33 @@ if (result.ok) signTheUserIn(result.identity);
 
 The mode (transparent-amount vs shielded-memo) is inferred from the service address type. `inferMemoChallengeMode(address)` exposes the same inference if you need it.
 
+## Transparent explorer helper
+
+`@siwz/core/explorers` ships a Blockchair-backed `MemoExplorer` so the server side of the transparent-amount flow doesn't need its own block-explorer client:
+
+```ts
+import { BlockchairExplorer, type MemoExplorer } from "@siwz/core/explorers";
+
+const explorer: MemoExplorer = new BlockchairExplorer({
+  // optional: apiKey (raises rate limits), baseUrl, fetch (DI for tests)
+});
+
+const outputs = await explorer.getRecentOutputsToAddress(serviceAddress, 50);
+for (const output of outputs) {
+  const r = await verifyMemoChallenge({
+    secret,
+    token,
+    observedAmountZatoshi: output.amountZatoshi,
+    observedRecipient: output.address,
+  });
+  if (r.ok) return r.identity;
+}
+```
+
+For the full Next.js route-handler version (issue + poll, rate-limit hook, the 200/202/4xx wire convention `<MemoSignIn />` expects), use [`@siwz/next-auth/memo`](https://www.npmjs.com/package/@siwz/next-auth) which wraps this loop in `pollMemoHandler({ explorer, secret })`.
+
+Blockchair indexes the public chain only, so this class implements `getRecentOutputsToAddress` and not `getRecentMemosToAddress`. For shielded-memo sign-in, run a backend that holds the IVK (see [`apps/lightwallet-rpc`](https://github.com/ZecHub/siwz/tree/main/apps/lightwallet-rpc)) and write a thin adapter that fills in `getRecentMemosToAddress` on the same `MemoExplorer` interface.
+
 ## Signed-message sign-in (SIWE-style)
 
 ```ts
@@ -60,7 +87,7 @@ import { SiwzMessage, generateNonce, verifyMessage } from "@siwz/core";
 
 const msg = new SiwzMessage({
   domain: "myapp.com",
-  address: "t1Mzhr3kuvJZptZsHWErxXEpVAyrgyngFmK",
+  address: "t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu",
   uri: "https://myapp.com/login",
   network: "mainnet",
   nonce: generateNonce(),
@@ -88,7 +115,7 @@ Two intentional differences from SIWE:
 
 ```
 example.com wants you to sign in with your Zcash account:
-t1Mzhr3kuvJZptZsHWErxXEpVAyrgyngFmK
+t1Hxw6JqWMnhDK5jRCieg5bFHM2qt7UtQvu
 
 I accept the ToS at https://example.com/tos
 
@@ -142,6 +169,15 @@ ZCASH_BLOCKS, type ZcashBlockName
 
 // Errors
 SiwzError, type SiwzErrorCode
+
+// Type-level only at the root (runtime lives in the subpath)
+type MemoExplorer, type RecentOutput, type RecentMemo
+```
+
+```ts
+// Subpath: @siwz/core/explorers
+BlockchairExplorer, ExplorerError
+type BlockchairExplorerOptions
 ```
 
 ## Tests
@@ -154,7 +190,7 @@ pnpm --filter @siwz/core test
 
 ## Related packages
 
-- [`@siwz/react`](https://www.npmjs.com/package/@siwz/react): `<SignInWithZcash />`, `useSiwz()`, MetaMask Snap helpers.
+- [`@siwz/react`](https://www.npmjs.com/package/@siwz/react): `<MemoSignIn />`, `<SignInWithZcash />`, `useSiwz()`, MetaMask Snap helpers.
 - [`@siwz/next-auth`](https://www.npmjs.com/package/@siwz/next-auth): NextAuth credentials provider and stateless HMAC nonces.
 
 ## License

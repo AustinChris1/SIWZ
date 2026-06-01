@@ -75,6 +75,80 @@ export async function GET() {
 
 The `/nonce` subpath import is the small slice you can use without pulling in the rest of the provider. Useful if your nonce route runs in an edge runtime or you want to issue nonces from a separate service.
 
+## Memo-challenge handlers
+
+For the memo-challenge sign-in path (the one [`<MemoSignIn />`](https://www.npmjs.com/package/@siwz/react) drives), `@siwz/next-auth/memo` exposes two App Router POST handlers that turn the server side into a one-liner each:
+
+```ts
+// app/api/auth/memo/issue/route.ts
+import { issueMemoHandler } from "@siwz/next-auth/memo";
+
+export const POST = issueMemoHandler({
+  secret: process.env.NEXTAUTH_SECRET!,
+  serviceAddress: process.env.SIWZ_SERVICE_ADDRESS!,
+  network: "mainnet",
+});
+```
+
+```ts
+// app/api/auth/memo/poll/route.ts
+import { pollMemoHandler } from "@siwz/next-auth/memo";
+import { BlockchairExplorer } from "@siwz/core/explorers";
+
+export const POST = pollMemoHandler({
+  secret: process.env.NEXTAUTH_SECRET!,
+  explorer: new BlockchairExplorer(),
+});
+```
+
+That's the entire server. `<MemoSignIn />` posts to these routes by default, so the client side is just `<MemoSignIn onSuccess={…} />`.
+
+### Wire convention
+
+`<MemoSignIn />` treats any non-2xx as a transient network error and silently retries until its timeout. The handlers follow this convention so the component behaves correctly:
+
+| Status | Body | Meaning |
+|---|---|---|
+| 200 | `{ ok: true, identity, txid, mode }` | Match. Sign the user in. |
+| 202 | `{ ok: false, retryable: true }` | No match yet. Keep polling. |
+| 4xx | `{ ok: false, error: "..." }` | Terminal (bad token, malformed body). Stop. |
+
+If you write a custom poll handler, mirror this. Returning 4xx for "not yet matched" causes the component to silently retry instead of failing fast on terminal errors.
+
+### Shielded-memo sign-in
+
+`BlockchairExplorer` only indexes the public chain. For shielded-memo (the `zs…`/`u1…` service-address case), implement the `MemoExplorer` interface against a backend that holds the IVK and pass that instead:
+
+```ts
+import type { MemoExplorer } from "@siwz/core";
+
+const zingoExplorer: MemoExplorer = {
+  async getRecentMemosToAddress(address, limit) {
+    // call your lightwallet-rpc / zcashd / zaino wrapper
+    return [{ txid: "...", memo: "SIWZ:abc123", amountZatoshi: 100n }];
+  },
+};
+```
+
+`pollMemoHandler` dispatches by the address type encoded in the issue token, so the same route serves both flows depending on what `serviceAddress` was set to.
+
+### Identity continuity
+
+To thread a UFVK or a previous anonymous id through the issue body (so the same wallet always resolves to the same identity), pass `resolveIdentity`:
+
+```ts
+issueMemoHandler({
+  secret: process.env.NEXTAUTH_SECRET!,
+  serviceAddress: process.env.SIWZ_SERVICE_ADDRESS!,
+  network: "mainnet",
+  resolveIdentity: async (body) => {
+    const { ufvk } = body as { ufvk?: string };
+    if (ufvk) return await canonicalIdentityFromUfvk(ufvk);
+    return undefined;
+  },
+});
+```
+
 ## Why stateless nonces
 
 A naive nonce implementation stores `nonce -> expiry` in memory or a database. That works but adds a stateful component to an otherwise stateless flow.
@@ -121,6 +195,15 @@ verifyNonceToken(token, { secret })            // -> { ok: true, nonce } | { ok:
 // Types
 type SiwzProviderOptions, SiwzCredentials, SiwzUser
 type NonceTokenOptions, IssuedNonce, VerifyNonceResult
+```
+
+```ts
+// Subpath: @siwz/next-auth/memo
+issueMemoHandler(opts)                         // -> (req: Request) => Promise<Response>
+pollMemoHandler(opts)                          // -> (req: Request) => Promise<Response>
+
+// Types
+type IssueMemoHandlerOptions, PollMemoHandlerOptions
 ```
 
 ## Related packages
