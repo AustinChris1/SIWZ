@@ -81,20 +81,24 @@ Cryptographic detail: SIWZ uses the same wire format zcashd's `signmessage` RPC 
 ## Status & roadmap
 
 **Working today:**
-- **Memo-challenge sign-in** (primary flow) via ZIP 321 deep link + QR code + block-explorer verification.
-- Transparent (`t1…`, `tm…`) address sign-in via signmessage paste flow.
-- MetaMask + Zcash-Snap permission-based auth (architectural integration ready; gated by upstream allowlist).
-- 46 unit tests covering ZIP 321 round-trip, memo-challenge HMAC, message format, address parsing, signature verify.
-- ZBooks: UFVK management, transaction tagging, monthly P&L, CSV export, multi-user roles, three sign-in flows.
+- **Memo-challenge sign-in** (primary flow): `<MemoSignIn />` + drop-in `issueMemoHandler` / `pollMemoHandler` + `SiwzMemoProvider`. Free transparent explorer chain (3xpl + Blockchair fallback) by default; bring-your-own shielded explorer for `zs…` / `u1…` service addresses.
+- Transparent (`t1…`, `tm…`) signed-message via `<SignInWithZcash />` + `SiwzProvider`.
+- MetaMask + Zcash-Snap permission-based auth (architectural integration ready; gated by ChainSafe's allowlist upstream).
+- Matching `<SignOut />` component with idle / busy / confirm states.
+- 59 unit tests covering ZIP 321 round-trip, memo-challenge HMAC, message format, address parsing, signature verify.
+- Shielded memo decryption via [`apps/lightwallet-rpc`](./apps/lightwallet-rpc) — a `zingo-cli`-backed HTTPS wrapper that ships as a multi-arch Docker image with GHCR auto-publish.
+- ZBooks: real UFVK sync against `apps/lightwallet-rpc`, transaction tagging, monthly P&L, CSV export, multi-user roles + RBAC, three sign-in flows, non-custodial multi-recipient ZIP 321 payouts with auto-reconciliation against the treasury UFVK.
+- AES-256-GCM encryption-at-rest for UFVKs, owner-gated key mutation, rate-limited memo endpoints, stale-sync recovery.
 - Three end-to-end test scripts proving the full server-side path for each flow.
 
-**Stretch / future:**
-- Drop-in WASM ZIP 304 verifier for Sapling z-addresses (verifier hook exposed; plug in your own).
-- Real lightwalletd-backed shielded memo decryption (replaces the transparent-address + amount-nonce trick with shielded memo binding).
-- Orchard signing — waiting on a finalized ZIP.
-- **[ZSAs](https://zips.z.cash/zip-0226)** — identity-as-a-non-transferable-shielded-asset for team-membership auth. NU6+ feature; will land in SIWZ when wallet support stabilizes.
-- ZBooks: real lightwalletd sync of UFVK transactions (currently seeded with sample data).
-- When ChainSafe's WebZjs Snap broadens its origin allowlist beyond `webzjs.chainsafe.dev`, the Snap path lights up automatically.
+**Where Zcash is going and where SIWZ goes with it:**
+- **[ZIP 304](https://zips.z.cash/zip-0304) Sapling signed messages.** SIWZ exposes a `saplingVerifier` plug-point in `verifyMessage`; drop in a WASM wrapper around `librustzcash` and z-addr `signmessage` lights up. Distribution problem, not protocol problem.
+- **Orchard signing.** Once the ZIP lands and wallets converge, the same dispatcher slot accepts an `orchardVerifier` callback — same shape, different curve.
+- **[NU6 + ZSAs](https://zips.z.cash/zip-0226).** Zcash Shielded Assets unlock a fourth sign-in flow: issue a non-transferable ZSA representing membership in a team / DAO / paid community; sign in by proving you hold it. No payment, no signature, no QR. For ZBooks this means treasurer-issued team membership tokens with the sign-in side falling out for free. SIWZ's `MemoExplorer` abstraction extends naturally to a "does this address hold ZSA X" predicate.
+- **[FROST](https://frost.zfnd.org/) threshold signing.** Already landing in the Zcash ecosystem for multi-party shielded spends. ZBooks's payout flow is structured to absorb it: today it builds one multi-recipient ZIP 321 URI for a single treasurer to sign; tomorrow that same URI is one input to an N-of-M FROST round.
+- **MetaMask Snap origin allowlist.** When ChainSafe broadens `endowment:rpc.allowedOrigins`, the Snap flow lights up across third-party origins automatically; no SIWZ-side change.
+
+The thesis: SIWZ is shaped so each Zcash protocol upgrade (NU6, ZSAs, mature ZIP 304, FROST) becomes a plug-in, not a rewrite. Every flow that ships today is structured around a verifier callback or explorer interface that the next-cycle primitive slots into without breaking consumers.
 
 ## License
 

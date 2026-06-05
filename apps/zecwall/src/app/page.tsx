@@ -1,22 +1,27 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { listComments } from "@/lib/store";
-import { SignInClient } from "./SignInClient";
+import { SignInClient, SignOutButton } from "./SignInClient";
 import { CommentForm } from "./CommentForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
-  const address = (session?.user as { address?: string } | undefined)?.address;
+  const address = session?.user?.address;
   const comments = listComments();
 
   return (
     <>
       {address ? (
         <section className="card flex flex-col gap-3">
-          <div className="text-xs opacity-60">Signed in as</div>
-          <code className="font-mono text-sm break-all">{address}</code>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="text-xs opacity-60">Signed in as</div>
+              <code className="font-mono text-sm break-all">{address}</code>
+            </div>
+            <SignOutButton />
+          </div>
           <CommentForm />
         </section>
       ) : (
