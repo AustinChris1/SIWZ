@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "../components/ThemeToggle";
 
-const GITHUB = "https://github.com";
+const GITHUB = "https://github.com/AustinChris1/SIWZ";
 const NPM_CORE = "https://www.npmjs.com/package/@siwz/core";
 const NPM_REACT = "https://www.npmjs.com/package/@siwz/react";
 const NPM_NEXT = "https://www.npmjs.com/package/@siwz/next-auth";
@@ -35,7 +35,7 @@ const JSON_LD = {
       name: "Sign in with Zcash",
       alternateName: "SIWZ",
       programmingLanguage: "TypeScript",
-      codeRepository: "https://github.com/austinchris/SWZ",
+      codeRepository: "https://github.com/AustinChris1/SIWZ",
       license: "https://opensource.org/licenses/MIT",
       keywords:
         "zcash, sign-in, authentication, zip-321, memo-challenge, nextauth, react, metamask-snap, siwe-alternative",
@@ -82,7 +82,7 @@ export default function Home() {
           <div className="nav-links">
             <a className="hide-sm" href="#compat">Compatibility</a>
             <a className="hide-sm" href="#quickstart">Quickstart</a>
-            <a className="hide-sm" href="#apps">Reference apps</a>
+            <a className="hide-sm" href="#apps">Reference app</a>
             <a className="hide-sm" href="#packages">Packages</a>
             <ThemeToggle />
             <a className="gh-btn" href={GITHUB} target="_blank" rel="noreferrer"><GithubIcon /> GitHub</a>
@@ -177,7 +177,7 @@ export default function Home() {
               </tbody>
             </table>
           </div>
-          <p className="matrix-note">Wallet support data based on the full matrix in <code>docs/wallets.md</code>. Memo-challenge coverage is universal; the long tail of shielded wallets is rolled up into one row.</p>
+          <p className="matrix-note">Memo-challenge coverage is universal; the long tail of shielded wallets is rolled up into one row.</p>
         </div>
       </section>
 
@@ -289,7 +289,7 @@ export default function Home() {
           <div className="footer-grid">
             <div className="footer-brand">
               <div className="brand"><Logo /> SIWZ</div>
-              <p className="blurb">Open, non-custodial sign-in for Zcash. Three flows, three npm packages, two reference apps. Built for the Zechub hackathon.</p>
+              <p className="blurb">Open, non-custodial sign-in for Zcash. Three flows, three npm packages, one reference app. Built for the Zechub hackathon.</p>
             </div>
             <div className="footer-col">
               <h4>Product</h4>
@@ -297,7 +297,7 @@ export default function Home() {
                 <li><a href="#compat">Wallet matrix</a></li>
                 <li><a href="#flows">Sign-in flows</a></li>
                 <li><a href="#quickstart">Quickstart</a></li>
-                <li><a href="#apps">Reference apps</a></li>
+                <li><a href="#apps">Reference app</a></li>
               </ul>
             </div>
             <div className="footer-col">
@@ -360,15 +360,6 @@ function GithubIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.92.58.1.79-.25.79-.55v-2.03c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.69 1.25 3.35.95.1-.74.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .96-.31 3.16 1.18a10.94 10.94 0 0 1 5.74 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.77 1.05.77 2.12v3.14c0 .3.21.66.8.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z" />
-    </svg>
-  );
-}
-
-function LedgerIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z" />
-      <path d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   );
 }

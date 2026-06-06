@@ -28,7 +28,7 @@ export default async function Home() {
         <section className="card flex flex-col gap-3">
           <p className="text-sm">
             This wall is open to anyone who can prove they hold a Zcash address.
-            Sign in with SIWZ — either by signing a challenge message in your
+            Sign in with SIWZ, either by signing a challenge message in your
             wallet, or by sending a tiny shielded payment with the included memo.
           </p>
           <SignInClient />
@@ -40,7 +40,7 @@ export default async function Home() {
           {comments.length} comment{comments.length === 1 ? "" : "s"}
         </h2>
         {comments.length === 0 && (
-          <div className="text-sm opacity-50">No comments yet — be first.</div>
+          <div className="text-sm opacity-50">No comments yet. Be first.</div>
         )}
         {comments.map((c) => (
           <article key={c.id} className="card flex flex-col gap-1">

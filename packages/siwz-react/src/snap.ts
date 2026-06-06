@@ -75,7 +75,7 @@ export async function detectSnapEnvironment(snapId: string = DEFAULT_SNAP_ID): P
     return {
       kind: "no-metamask",
       message:
-        "MetaMask wasn't found. If you have multiple Ethereum wallets installed (Phantom, Coinbase, Brave, …), one of them may be capturing window.ethereum — try pausing them or set MetaMask as default.",
+        "MetaMask wasn't found. If you have multiple Ethereum wallets installed (Phantom, Coinbase, Brave, …), one of them may be capturing window.ethereum. Try pausing them or set MetaMask as default.",
     };
   }
   let snaps: Record<string, { version: string }> = {};

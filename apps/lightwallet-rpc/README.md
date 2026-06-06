@@ -1,6 +1,6 @@
 # `@siwz/lightwallet-rpc`
 
-Tiny HTTPS wrapper around `zingo-cli`. Runs on a small VPS so that ZBooks (or any SIWZ-using app, deployed anywhere — Vercel, Cloudflare, your laptop) can ask "show me incoming memos to this z-addr" without running a full Zcash node.
+Tiny HTTPS wrapper around `zingo-cli`. Runs on a small VPS so that any SIWZ-using app, deployed anywhere (Vercel, Cloudflare, your laptop), can ask "show me incoming memos to this z-addr" without running a full Zcash node.
 
 **Single dependency: zingo-cli on the same machine.**
 **Single file: [`src/server.mjs`](src/server.mjs).**
@@ -66,7 +66,7 @@ The legacy install path. Use this only if you want full control of the host
 (systemd unit, nginx, certbot all by hand). For most cases, the Docker route
 above is simpler.
 
-See [`docs/winning-deployment.md`](../../docs/winning-deployment.md) for the full 15-minute walkthrough. Short version:
+Short version:
 
 ```bash
 # On a $3/mo VPS (RackNerd 2GB, Hetzner CX22, etc.):
@@ -83,24 +83,24 @@ echo "Save this token: $LIGHTWALLET_RPC_TOKEN"
 node src/server.mjs   # binds 127.0.0.1:18232
 
 # 3. nginx + certbot for TLS at https://rpc.example.com → 127.0.0.1:18232.
-# 4. In ZBooks's Vercel env:
+# 4. In your Vercel-deployed app's env:
 #      ZCASH_RPC_URL=https://rpc.example.com/memos     ← (note: not a JSON-RPC, see Note 1)
 #      LIGHTWALLET_RPC_TOKEN=<same token>
 ```
 
-> **Note 1:** ZBooks's `ZcashRpcExplorer` speaks Bitcoin-style JSON-RPC (POST `{jsonrpc,method,params,id}`). This wrapper speaks plain JSON. ZBooks uses a separate `LightwalletExplorer` class that posts directly to `/memos` — see `apps/demo/src/lib/explorer.ts`.
+> **Note 1:** The `ZcashRpcExplorer` speaks Bitcoin-style JSON-RPC (POST `{jsonrpc,method,params,id}`). This wrapper speaks plain JSON. Your app posts directly to `/memos` instead, via a `MemoExplorer` adapter (see the `@siwz/next-auth` README).
 
 ## Security
 
 - **Bind to localhost only.** The server listens on `127.0.0.1:18232`. nginx terminates TLS and proxies. Don't expose the Node port to the public internet.
 - **Bearer token must be ≥32 chars.** The server refuses to start otherwise.
 - **Constant-time token comparison** so timing attacks can't probe the token.
-- **TLS via certbot is mandatory** in production. The token is the only thing standing between an attacker and your wallet's memo stream — if it goes over plain HTTP, it's recoverable from any network hop.
+- **TLS via certbot is mandatory** in production. The token is the only thing standing between an attacker and your wallet's memo stream. Over plain HTTP, it's recoverable from any network hop.
 - **Rate limiting** is the proxy's job (nginx `limit_req`). The wrapper does not implement its own; it's a single-tenant service for your apps.
 
 ## What it deliberately doesn't do
 
-- **No sending.** The wrapper is read-only — `list`/`sync`, never `send`/`shield`. There's no path through this API to spend funds.
+- **No sending.** The wrapper is read-only: `list`/`sync`, never `send`/`shield`. There's no path through this API to spend funds.
 - **No multi-tenant.** Single bearer token. One VPS per project. If you want multi-tenant, run multiple wallets on multiple ports.
 - **No DB.** Stateless except for `zingo-cli`'s own sync state, which lives in `~/.zingo`.
 

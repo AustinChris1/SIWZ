@@ -1,7 +1,7 @@
 {
   "name": "@siwz/react",
   "version": "0.2.1",
-  "description": "Sign in with Zcash — drop-in React component & hook",
+  "description": "Sign in with Zcash: drop-in React component and hook",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -58,10 +58,10 @@
   "homepage": "https://siwz.vercel.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/austinchris/SWZ.git",
+    "url": "https://github.com/AustinChris1/SIWZ.git",
     "directory": "packages/siwz-react"
   },
-  "bugs": "https://github.com/austinchris/SWZ/issues",
+  "bugs": "https://github.com/AustinChris1/SIWZ/issues",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

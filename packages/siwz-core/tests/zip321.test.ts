@@ -28,16 +28,16 @@ describe("buildZip321 / parseZip321", () => {
     const uri = buildZip321({
       address: mainnetAddr,
       amount: "0.0001337",
-      memo: "sign-in to ZBooks",
-      label: "ZBooks",
+      memo: "sign-in to ZecWall",
+      label: "ZecWall",
       message: "Send to authenticate",
     });
     expect(uri).toMatch(/^zcash:t1/);
     const parsed = parseZip321(uri);
     expect(parsed.address).toBe(mainnetAddr);
     expect(parsed.amount).toBe("0.0001337");
-    expect(parsed.memo).toBe("sign-in to ZBooks");
-    expect(parsed.label).toBe("ZBooks");
+    expect(parsed.memo).toBe("sign-in to ZecWall");
+    expect(parsed.label).toBe("ZecWall");
     expect(parsed.message).toBe("Send to authenticate");
   });
 

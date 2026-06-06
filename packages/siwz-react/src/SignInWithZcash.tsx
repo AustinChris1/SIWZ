@@ -96,7 +96,7 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
               : snapEnv?.kind === "snap-not-installed"
               ? "Install Zcash Snap & sign in"
               : snapEnv?.kind === "no-metamask"
-              ? "MetaMask not detected — install it"
+              ? "MetaMask not detected: install it"
               : "Sign in with MetaMask"}
           </button>
           {snapEnv?.kind === "no-metamask" ? (
@@ -109,7 +109,7 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
           ) : (
             <p className="siwz-help-note">
               Connecting to the ChainSafe Zcash Snap reads your viewing key
-              (read-only — no spend access). MetaMask will ask you to approve.
+              (read-only, no spend access). MetaMask will ask you to approve.
             </p>
           )}
           <button
@@ -185,7 +185,7 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
                 <strong>Zodl, Zingo, YWallet:</strong> look for "Sign Message" in the wallet menu (exact path varies by version).
               </li>
               <li>
-                <strong>Unified address holders:</strong> sign with the transparent receiver inside your UA — most wallets surface it as a sub-address.
+                <strong>Unified address holders:</strong> sign with the transparent receiver inside your UA. Most wallets surface it as a sub-address.
               </li>
             </ul>
           </details>
@@ -193,7 +193,7 @@ export function SignInWithZcash(props: SignInWithZcashProps) {
           <details className="siwz-help">
             <summary>Why do I have to paste my address first?</summary>
             <p className="siwz-help-note">
-              The address is part of the message you're signing — the server
+              The address is part of the message you're signing; the server
               needs to know which address to verify against, and the wallet
               needs to know which key to sign with. There's no standard
               browser-to-wallet bridge for Zcash (yet), so the SDK can't

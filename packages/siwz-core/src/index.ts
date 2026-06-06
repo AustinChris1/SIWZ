@@ -1,4 +1,4 @@
-/** @siwz/core — Sign in with Zcash core protocol. */
+/** @siwz/core: Sign in with Zcash core protocol. */
 
 export { SiwzMessage, generateNonce } from "./message.js";
 export {

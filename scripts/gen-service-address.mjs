@@ -38,7 +38,7 @@ if (existsSync(outPath)) {
 }
 
 const contents =
-  `# SIWZ service address — GENERATED ${new Date().toISOString()}\n` +
+  `# SIWZ service address. GENERATED ${new Date().toISOString()}\n` +
   `# Network: ${network}\n` +
   `# KEEP THIS FILE SECRET. Anyone with the WIF can spend funds at this address.\n` +
   `#\n` +
@@ -52,7 +52,7 @@ console.log(`  Address: ${address}`);
 console.log(`  WIF saved to: ${outPath}  (mode 600, gitignored)`);
 console.log(``);
 console.log(`Next steps:`);
-console.log(`  1. Add to apps/demo/.env.local:`);
+console.log(`  1. Add to apps/zecwall/.env.local:`);
 console.log(`       SIWZ_SERVICE_ADDRESS=${address}`);
 console.log(`  2. Set SIWZ_DEMO=0  (or remove the line) so real txs are checked.`);
 console.log(`  3. Restart the dev server.`);

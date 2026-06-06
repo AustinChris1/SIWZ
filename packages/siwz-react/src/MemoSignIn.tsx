@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
 /** Server response from the issue endpoint. Mirrors the shape SIWZ's reference
- *  endpoints (the ones in apps/demo, apps/zecwall, ZTest) return. Required
+ *  endpoints (the ones in apps/zecwall) return. Required
  *  fields are `uri` (encoded into the QR) and `token` (the HMAC-signed
  *  challenge token the poll endpoint validates against). */
 export interface MemoChallengeData {

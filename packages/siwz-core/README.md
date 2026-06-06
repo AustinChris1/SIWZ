@@ -85,7 +85,7 @@ for (const output of outputs) {
 
 For the full Next.js route-handler version (issue + poll, default-wired explorer, the 200/202/4xx wire convention `<MemoSignIn />` expects), use [`@siwz/next-auth/memo`](https://www.npmjs.com/package/@siwz/next-auth). The `pollMemoHandler` there already chains this MultiExplorer as a default, so most consumers never touch these classes directly.
 
-These explorers index the public chain only. For shielded-memo sign-in (`zs…`/`u1…` service address), run a backend that holds the IVK (see [`apps/lightwallet-rpc`](https://github.com/ZecHub/siwz/tree/main/apps/lightwallet-rpc)) and write a thin adapter implementing `getRecentMemosToAddress` on the `MemoExplorer` interface.
+These explorers index the public chain only. For shielded-memo sign-in (`zs…`/`u1…` service address), run a backend that holds the IVK (see [`apps/lightwallet-rpc`](https://github.com/AustinChris1/SIWZ/tree/main/apps/lightwallet-rpc)) and write a thin adapter implementing `getRecentMemosToAddress` on the `MemoExplorer` interface.
 
 ## Signed-message sign-in (SIWE-style)
 

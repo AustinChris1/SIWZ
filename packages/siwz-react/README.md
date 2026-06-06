@@ -30,7 +30,7 @@ The memo-challenge flow asks the wallet to make a tiny ZEC payment with a server
 
 ### Zero-config
 
-Pair with a server that exposes `/api/auth/memo/issue` and `/api/auth/memo/poll` (the shape used by `apps/demo`, `apps/zecwall`, and the `@siwz/next-auth` reference handlers):
+Pair with a server that exposes `/api/auth/memo/issue` and `/api/auth/memo/poll` (the shape used by `apps/zecwall` and the `@siwz/next-auth` reference handlers):
 
 ```tsx
 import { MemoSignIn } from "@siwz/react";
@@ -160,10 +160,9 @@ s.reset()
 
 `<MemoSignIn />` ships with the package and covers the common case end-to-end: issue, render QR, poll, surface identity. The protocol primitives (`issueMemoChallenge`, `verifyMemoChallenge`, the ZIP 321 URI builder) live in [`@siwz/core`](https://www.npmjs.com/package/@siwz/core) for apps that need a different UI shape.
 
-Two inline reference implementations remain useful when you want to build your own component, both linked from <https://siwz.vercel.app>:
+An inline reference implementation is useful when you want to build your own component, linked from <https://siwz.vercel.app>:
 
-- `apps/demo`: a full memo flow with auto-reconciliation, dark-mode styling, and accessibility polish.
-- `apps/zecwall`: the same flow with no extras, written to be readable end-to-end in a single file.
+- `apps/zecwall`: the memo flow with no extras, written to be readable end-to-end in a single file.
 
 ## MetaMask Zcash Snap
 

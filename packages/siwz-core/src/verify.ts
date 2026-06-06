@@ -115,7 +115,7 @@ export async function verifySaplingSignature(
   if (!verifier) {
     return failure(
       "VERIFIER_UNAVAILABLE",
-      "Sapling verification requires a ZIP 304 verifier — pass `saplingVerifier` to verifyMessage. See docs/sapling-wasm.md.",
+      "Sapling verification requires a ZIP 304 verifier: pass `saplingVerifier` to verifyMessage.",
     );
   }
 
@@ -181,7 +181,7 @@ export async function verifyMessage(
     case "unified":
       return failure(
         "UNSUPPORTED_ADDRESS_TYPE",
-        "Unified addresses are not signed directly — extract a transparent or sapling receiver client-side and sign with that. The UA can still be the displayed identity.",
+        "Unified addresses are not signed directly: extract a transparent or sapling receiver client-side and sign with that. The UA can still be the displayed identity.",
       );
     case "orchard":
       return failure(
@@ -191,7 +191,7 @@ export async function verifyMessage(
     case "p2sh":
       return failure(
         "UNSUPPORTED_ADDRESS_TYPE",
-        "P2SH (t3.../t2...) addresses cannot sign messages — they're scripts, not keys.",
+        "P2SH (t3.../t2...) addresses cannot sign messages: they're scripts, not keys.",
       );
   }
 }

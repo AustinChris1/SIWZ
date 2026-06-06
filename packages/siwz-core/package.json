@@ -1,7 +1,7 @@
 {
   "name": "@siwz/core",
   "version": "0.2.2",
-  "description": "Sign in with Zcash — core protocol: message format, address parsing, signature verification",
+  "description": "Sign in with Zcash core protocol: message format, address parsing, signature verification",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -57,10 +57,10 @@
   "homepage": "https://siwz.vercel.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/austinchris/SWZ.git",
+    "url": "https://github.com/AustinChris1/SIWZ.git",
     "directory": "packages/siwz-core"
   },
-  "bugs": "https://github.com/austinchris/SWZ/issues",
+  "bugs": "https://github.com/AustinChris1/SIWZ/issues",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

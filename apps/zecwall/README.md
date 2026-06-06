@@ -1,6 +1,6 @@
 # ZecWall: a Zcash-gated comments wall (SIWZ reference integration)
 
-This is what dropping SIWZ into a new app looks like. Around 300 lines of integration code (`auth.ts` + nonce route + `SignInClient.tsx`), plus a few small files for the comments wall itself:
+ZecWall is the minimal SIWZ reference integration. This is what dropping SIWZ into a new app looks like: around 300 lines of integration code (`auth.ts` + nonce route + `SignInClient.tsx`), plus a few small files for the comments wall itself:
 
 | File | Purpose | Lines |
 |---|---|---|
@@ -10,9 +10,9 @@ This is what dropping SIWZ into a new app looks like. Around 300 lines of integr
 
 The rest (`store.ts`, `page.tsx`, `CommentForm.tsx`) is the app itself: comments storage and a tiny UI. SIWZ doesn't constrain any of it.
 
-## Run alongside ZBooks
+## Run it
 
-ZBooks runs on `:3000`; this runs on `:3001`. Both consume the same `@siwz/*` workspace packages, and that's exactly the point: SIWZ is a primitive, not a framework. Each app picks its own backend, its own UI, its own data layer.
+This runs on `:3001` and consumes the `@siwz/*` workspace packages. That's the point: SIWZ is a primitive, not a framework. An app picks its own backend, its own UI, its own data layer.
 
 ```bash
 pnpm install
@@ -24,9 +24,9 @@ pnpm --filter @siwz/zecwall dev
 
 ## What's *not* here on purpose
 
-- No UFVK import, no transaction tagging, no team roles: that's ZBooks territory. This app authenticates and gates content. Nothing else.
+- No UFVK import, no transaction tagging, no team roles. This app authenticates and gates content. Nothing else.
 - No DB. JSON file for comments. Real apps swap this immediately; SIWZ is unaffected.
-- The three flows are wired inline in `SignInClient.tsx`. For a packaged drop-in version of the memo flow, ZBooks's reusable `MemoSignIn` component is a 1-line addition.
+- The three flows are wired inline in `SignInClient.tsx`. For a packaged drop-in version of the memo flow, the `<MemoSignIn />` component from `@siwz/react` is a 1-line addition.
 
 ## What it proves
 

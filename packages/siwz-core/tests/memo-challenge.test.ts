@@ -165,7 +165,7 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
 
   it("round-trip verify succeeds with matching observation", async () => {
     const ch = await issueMemoChallenge({
-      secret: SECRET, serviceAddress, network: "mainnet", identity: "alice@zbooks",
+      secret: SECRET, serviceAddress, network: "mainnet", identity: "alice@zecwall",
     });
     const result = await verifyMemoChallenge({
       secret: SECRET,
@@ -174,7 +174,7 @@ describe("issueMemoChallenge / verifyMemoChallenge", () => {
       observedRecipient: serviceAddress,
     });
     expect(result.ok).toBe(true);
-    expect(result.identity).toBe("alice@zbooks");
+    expect(result.identity).toBe("alice@zecwall");
   });
 
   it("rejects when amount differs by even 1 zatoshi", async () => {

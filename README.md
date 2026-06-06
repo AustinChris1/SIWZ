@@ -1,5 +1,7 @@
 # Sign in with Zcash (SIWZ)
 
+**[Live demo and docs](https://siwz.vercel.app)** · **[ZecWall reference app](https://zecwall.vercel.app)** · **[@siwz/core on npm](https://www.npmjs.com/package/@siwz/core)**
+
 > Drop-in, Zcash-native authentication for the open web. Three flows under one roof:
 
 | # | Flow | Wallet support | Speed | Trade-off |
@@ -19,14 +21,14 @@ npm i @siwz/react @siwz/next-auth @siwz/core
 ## Minimal example: memo-challenge
 
 ```tsx
-import { MemoSignIn } from "@/components/MemoSignIn"; // see apps/zecwall for the reference implementation
+import { MemoSignIn } from "@siwz/react"; // full wiring in apps/zecwall
 
 <MemoSignIn />
 ```
 
 On the server, three endpoints:
 - `POST /api/auth/memo/issue` → returns ZIP 321 URI + signed token
-- `POST /api/auth/memo/verify` → looks up the txid via your block-explorer client
+- `POST /api/auth/memo/poll` → looks up the txid via your block-explorer client
 - NextAuth credentials provider that consumes the verify envelope
 
 ## What's in this repo
@@ -39,31 +41,23 @@ On the server, three endpoints:
 | [`apps/zecwall`](./apps/zecwall) | ZecWall: minimal Zcash-gated comments wall consuming the packages end to end. The shortest possible SIWZ integration. |
 | [`apps/site`](./apps/site) | The siwz.vercel.app landing page. |
 | [`apps/lightwallet-rpc`](./apps/lightwallet-rpc) | `zingo-cli`-backed HTTPS wrapper for shielded sign-in. Ships as a multi-arch Docker image to GHCR. |
-| [`docs`](./docs) | Spec, architecture, integration guide, security model, wallet integration matrix. |
 
 ## Try the reference app locally
+
+[ZecWall](./apps/zecwall) is a Zcash-gated comments wall: the shortest end-to-end SIWZ integration. It runs live at [zecwall.vercel.app](https://zecwall.vercel.app).
 
 ```bash
 pnpm install
 cp apps/zecwall/.env.example apps/zecwall/.env.local
-# generate a NEXTAUTH_SECRET:
+# generate a NEXTAUTH_SECRET and paste it into apps/zecwall/.env.local:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-# paste it into apps/zecwall/.env.local
 
 pnpm --filter @siwz/zecwall dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in with any Zcash mainnet `t1…` address (you'll be the first admin), then add a UFVK on `/keys` to seed sample transactions.
+Open [http://localhost:3001](http://localhost:3001), sign in with any of the three flows, and post a comment. `SIWZ_DEMO=1` (the default in `.env.example`) lets the memo flow complete without a real on-chain payment; set `SIWZ_DEMO=0` plus a `SIWZ_SERVICE_ADDRESS` you own to check real transactions.
 
-If you don't have a wallet handy, the end-to-end script synthesizes a key, runs the entire SIWZ → add-UFVK → CSV-export flow, and asserts at each step:
-
-```bash
-node scripts/e2e-signin.mjs
-```
-
-The two paths SIWZ supports today:
-- **Paste flow (universal).** Works with every wallet that has `signmessage`: Zodl, Zingo, YWallet, `zcash-cli`, ZecWallet, Zcashd, Zallet, …
-- **MetaMask Snap (probed).** When `enableSnap` is passed to `<SignInWithZcash />`, the component detects MetaMask + the [ChainSafe WebZjs Zcash Snap](https://snaps.metamask.io/snap/npm/chainsafe/webzjs-zcash-snap/), and offers a one-click button. If the Snap doesn't expose a `signMessage` RPC yet, the component gracefully falls back to paste, so the integration lights up automatically when upstream lands the method.
+Need a service address? `node scripts/gen-service-address.mjs` writes a fresh t-addr keypair to a gitignored file.
 
 ## How signing actually works
 
@@ -84,7 +78,6 @@ Cryptographic detail: SIWZ uses the same wire format zcashd's `signmessage` RPC 
 - Matching `<SignOut />` component with idle / busy / confirm states.
 - 59 unit tests covering ZIP 321 round-trip, memo-challenge HMAC, message format, address parsing, signature verify.
 - Shielded memo decryption via [`apps/lightwallet-rpc`](./apps/lightwallet-rpc): a `zingo-cli`-backed HTTPS wrapper that ships as a multi-arch Docker image with GHCR auto-publish.
-- Three end-to-end test scripts proving the full server-side path for each flow.
 
 **Where Zcash is going and where SIWZ goes with it:**
 - **[ZIP 304](https://zips.z.cash/zip-0304) Sapling signed messages.** SIWZ exposes a `saplingVerifier` plug-point in `verifyMessage`; drop in a WASM wrapper around `librustzcash` and z-addr `signmessage` lights up. Distribution problem, not protocol problem.
