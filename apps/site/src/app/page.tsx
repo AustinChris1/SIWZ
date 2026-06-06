@@ -5,7 +5,6 @@ const GITHUB = "https://github.com";
 const NPM_CORE = "https://www.npmjs.com/package/@siwz/core";
 const NPM_REACT = "https://www.npmjs.com/package/@siwz/react";
 const NPM_NEXT = "https://www.npmjs.com/package/@siwz/next-auth";
-const ZBOOKS = "https://zecbooks.vercel.app";
 const ZECWALL = "https://zecwall.vercel.app";
 
 type Cell = "yes" | "no" | "t-only" | "snap";
@@ -243,23 +242,17 @@ export default function Home() {
         <div className="container">
           <div className="section-head">
             <div>
-              <div className="kicker"><span className="marker">&sect; 04</span>&nbsp; Reference apps</div>
-              <h2>Two apps, one primitive.</h2>
+              <div className="kicker"><span className="marker">&sect; 04</span>&nbsp; Reference app</div>
+              <h2>Read the wire end to end.</h2>
             </div>
-            <p className="blurb">Both consume the same <code>@siwz/*</code> packages. The point: SIWZ is a primitive, not a framework.</p>
+            <p className="blurb">A minimal app consuming the <code>@siwz/*</code> packages. The point: SIWZ is a primitive, not a framework.</p>
           </div>
           <div className="apps-grid">
-            <a className="app-card" href={ZBOOKS} target="_blank" rel="noreferrer">
-              <div className="icon"><LedgerIcon /></div>
-              <div className="tag">Production shape</div>
-              <h3>ZBooks <span className="arrow">&rarr;</span></h3>
-              <p>Accounting and payroll for shielded ZEC teams. Viewing-key books, batch payouts, P&amp;L and CSV exports. Real SIWZ in real product code.</p>
-            </a>
             <a className="app-card" href={ZECWALL} target="_blank" rel="noreferrer">
               <div className="icon"><ChatIcon /></div>
               <div className="tag">Minimal integration</div>
               <h3>ZecWall <span className="arrow">&rarr;</span></h3>
-              <p>A Zcash-gated comments wall. The minimal integration: if you can build this on a Saturday, SIWZ is real infrastructure.</p>
+              <p>A Zcash-gated comments wall. Three short files of auth code; everything else comes from the packages. If you can build this on a Saturday, SIWZ is real infrastructure.</p>
             </a>
           </div>
         </div>
@@ -319,7 +312,6 @@ export default function Home() {
               <h4>Resources</h4>
               <ul>
                 <li><a href={GITHUB} target="_blank" rel="noreferrer">GitHub</a></li>
-                <li><a href={ZBOOKS} target="_blank" rel="noreferrer">ZBooks</a></li>
                 <li><a href={ZECWALL} target="_blank" rel="noreferrer">ZecWall</a></li>
               </ul>
             </div>

@@ -81,7 +81,12 @@ const TRANSIENT_RE = /timeout|deadline|cancell|unavailable|transport error|\bEOF
 // Run `zingo-cli --server S <baseArgs> --waitsync <cmd>`, cycling the endpoint
 // list and retrying on transient sync errors. baseArgs may be a function so
 // callers can recompute wallet freshness between attempts.
-async function runZingo(baseArgs, cmd, { timeout, maxBuffer, lockKey }) {
+//
+// `parse` is an optional custom parser for commands whose output isn't JSON
+// (e.g. `balance` emits a Rust Debug print, not JSON). Returns the parsed
+// value if it returns a non-null result. Defaults to JSON extraction.
+async function runZingo(baseArgs, cmd, { timeout, maxBuffer, lockKey, parse }) {
+  const parser = parse ?? defaultJsonParser;
   const attempt = async () => {
     let lastErr;
     const attempts = Math.max(2, LIGHTWALLETD_LIST.length);
@@ -94,9 +99,9 @@ async function runZingo(baseArgs, cmd, { timeout, maxBuffer, lockKey }) {
           maxBuffer,
           timeout,
         });
-        const block = extractJsonBlock(stdout);
-        if (block) return JSON.parse(block);
-        lastErr = new Error(`zingo "${cmd}" via ${server} returned no JSON: ${stdout.trim().slice(0, 300) || "(empty)"}`);
+        const parsed = parser(stdout);
+        if (parsed != null) return parsed;
+        lastErr = new Error(`zingo "${cmd}" via ${server} returned no parseable data: ${stdout.trim().slice(0, 300) || "(empty)"}`);
       } catch (err) {
         lastErr = err;
         const blob = `${err.message ?? ""}${err.stderr ?? ""}${err.stdout ?? ""}`;
@@ -119,13 +124,80 @@ async function zingoCmd(cmd) {
   });
 }
 
+// Default parser: extract a JSON block out of zingo stdout. Used by
+// commands like `messages` that emit a JSON object/array possibly preceded
+// by log noise.
+function defaultJsonParser(stdout) {
+  const block = extractJsonBlock(stdout);
+  if (!block) return null;
+  try {
+    return JSON.parse(block);
+  } catch {
+    return null;
+  }
+}
+
+// Parser for `zingo-cli balance`, whose modern output is a Rust Debug print
+// (NOT JSON). Example output:
+//   Launching sync task...
+//   [
+//       confirmed_orchard_balance: 67_900
+//       unconfirmed_orchard_balance: 0
+//       total_orchard_balance: 67_900
+//       ...
+//       confirmed_transparent_balance: no view cap
+//   ]
+// We extract every `<key>: <value>` pair and translate `<int_with_underscores>`
+// to a Number, with "no view cap" treated as 0. Result has the same field
+// names so getUfvkBalance's existing summing logic keeps working.
+function parseZingoBalanceDebug(stdout) {
+  const fields = {};
+  const re = /([a-z][a-z0-9_]*_balance):\s*([0-9][0-9_]*|no view cap)/gi;
+  let m;
+  while ((m = re.exec(stdout)) !== null) {
+    const key = m[1];
+    const raw = m[2];
+    fields[key] = raw === "no view cap" ? 0 : Number(raw.replace(/_/g, ""));
+  }
+  return Object.keys(fields).length > 0 ? fields : null;
+}
+
+// Walks stdout and yields every balanced { ... } / [ ... ] block in order, then
+// returns the first one that successfully parses as JSON. Modern zingo-cli
+// emits a Rust Debug print of the wallet state before the actual JSON for
+// some commands (notably `balance`); skipping those non-JSON blocks fixes the
+// "Unexpected token 'c', \"[\n    confirmed_\"" parse failure.
 function extractJsonBlock(s) {
-  const firstOpen = s.search(/[\{\[]/);
-  if (firstOpen === -1) return null;
-  const stack = [];
+  const blocks = [];
+  let i = 0;
+  while (i < s.length) {
+    const open = s.slice(i).search(/[\{\[]/);
+    if (open === -1) break;
+    const start = i + open;
+    const block = balancedBlock(s, start);
+    if (!block) break;
+    blocks.push(block);
+    i = start + block.length;
+  }
+  // Prefer parseable blocks; among those, the first one wins.
+  for (const b of blocks) {
+    try {
+      JSON.parse(b);
+      return b;
+    } catch {
+      // Skip non-JSON debug blocks like Rust `[\n confirmed_orchard: 0, ...]`.
+    }
+  }
+  return null;
+}
+
+function balancedBlock(s, start) {
+  const opener = s[start];
+  if (opener !== "{" && opener !== "[") return null;
+  const stack = [opener];
   let inString = false;
   let escape = false;
-  for (let i = firstOpen; i < s.length; i++) {
+  for (let i = start + 1; i < s.length; i++) {
     const ch = s[i];
     if (escape) { escape = false; continue; }
     if (ch === "\\" && inString) { escape = true; continue; }
@@ -134,7 +206,7 @@ function extractJsonBlock(s) {
     if (ch === "{" || ch === "[") stack.push(ch);
     else if (ch === "}" || ch === "]") {
       stack.pop();
-      if (stack.length === 0) return s.slice(firstOpen, i + 1);
+      if (stack.length === 0) return s.slice(start, i + 1);
     }
   }
   return null;
@@ -199,7 +271,12 @@ async function zingoCmdForUfvk(ufvk, walletDir, cmd, opts = {}) {
     }
     return base;
   };
-  return runZingo(buildArgs, cmd, { timeout: 5 * 60_000, maxBuffer: 64 * 1024 * 1024, lockKey: walletDir });
+  return runZingo(buildArgs, cmd, {
+    timeout: 5 * 60_000,
+    maxBuffer: 64 * 1024 * 1024,
+    lockKey: walletDir,
+    parse: opts.parse,
+  });
 }
 
 function walletDirForUfvk(ufvk) {
@@ -264,27 +341,43 @@ async function _syncUfvkTransactionsImpl(ufvk, opts = {}) {
 
 // zingo-cli `balance` field names drift across versions; sum the per-pool
 // totals (orchard/sapling/transparent) and spendable_* defensively.
+//
+// Newer zingo-cli builds emit a Rust Debug print for `balance` with fields
+// like `confirmed_orchard_balance`, `unconfirmed_orchard_balance`,
+// `total_orchard_balance`. Older versions emit JSON with `orchard_balance`,
+// `spendable_orchard_balance`. We accept either by trying JSON first and
+// falling back to the debug parser, and by reading whichever set of keys is
+// present.
 async function getUfvkBalance(ufvk, opts = {}) {
   const dir = walletDirForUfvk(ufvk);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const data = await zingoCmdForUfvk(ufvk, dir, "balance", opts);
+  const data = await zingoCmdForUfvk(ufvk, dir, "balance", {
+    ...opts,
+    parse: (stdout) => defaultJsonParser(stdout) ?? parseZingoBalanceDebug(stdout),
+  });
 
   const num = (v) => {
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : 0;
   };
-  // zingo reports zatoshi integers for these fields.
-  const totalKeys = ["orchard_balance", "sapling_balance", "transparent_balance"];
-  const spendableKeys = [
+
+  // Legacy JSON shape: `orchard_balance`, `spendable_orchard_balance`, etc.
+  const legacyTotalKeys = ["orchard_balance", "sapling_balance", "transparent_balance"];
+  const legacySpendableKeys = [
     "spendable_orchard_balance",
     "spendable_sapling_balance",
     // transparent is spendable once confirmed; zingo lacks a spendable_transparent field.
     "transparent_balance",
   ];
+  // Modern Rust-debug shape: `total_*_balance` (= confirmed + unconfirmed),
+  // `confirmed_*_balance` (treated as spendable), `unconfirmed_*_balance`.
+  const modernTotalKeys = ["total_orchard_balance", "total_sapling_balance", "total_transparent_balance"];
+  const modernSpendableKeys = ["confirmed_orchard_balance", "confirmed_sapling_balance", "confirmed_transparent_balance"];
+
   let total = 0;
   let spendable = 0;
-  for (const k of totalKeys) total += num(data?.[k]);
-  for (const k of spendableKeys) spendable += num(data?.[k]);
+  for (const k of [...legacyTotalKeys, ...modernTotalKeys]) total += num(data?.[k]);
+  for (const k of [...legacySpendableKeys, ...modernSpendableKeys]) spendable += num(data?.[k]);
   // Guard against versions that only expose spendable.
   if (total === 0 && spendable > 0) total = spendable;
 
