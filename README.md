@@ -6,11 +6,11 @@
 
 | # | Flow | Wallet support | Speed | Trade-off |
 |---|---|---|---|---|
-| 1 | **Memo-challenge:** send a tiny shielded payment with a unique amount, app verifies on-chain ([ZIP 321](https://zips.z.cash/zip-0321) deep link + QR). Like zcashnames. | **All shielded wallets** (Zodl, Zingo, YWallet, eZcash, Zenith, Dizzy, Cake, Unstoppable, Brave Snap, etc.) | ~75s (block confirm) | Proves spend-authority over some ZEC, not specific-key ownership |
+| 1 | **Memo-challenge:** send a tiny shielded payment with a unique amount, app verifies on-chain ([ZIP 321](https://zips.z.cash/zip-0321) deep link + QR). Inspired by zcashnames. | **All shielded wallets** (Zodl, Zingo, YWallet, eZcash, Zenith, Dizzy, Cake, Unstoppable, Brave Snap, etc.) | ~75s (block confirm) | Proves spend-authority over some ZEC, not specific-key ownership |
 | 2 | **Signed-message paste:** sign a SIWZ challenge with your wallet's `signmessage`, paste the signature. | `zcash-cli`, YWallet | Instant | Most wallets don't expose `signmessage` |
 | 3 | **MetaMask + Zcash Snap:** Snap permission grant as identity (no challenge signature). | MetaMask + ChainSafe WebZjs Snap | Instant | Snap currently allowlists ChainSafe's own dApp only |
 
-The original SIWE-style pitch (sign-message-with-your-address) doesn't survive contact with the Zcash wallet landscape. Most wallets don't implement `signmessage`, and asking shielded users to authenticate via legacy transparent t-addrs is the wrong direction. **Memo-challenge is the primary flow**: it works with every wallet that sends shielded payments (i.e. all of them), uses Zcash's actual privacy strengths, and is the same pattern [zcashnames](https://zcashnames.com) already uses.
+The original SIWE-style pitch (sign-message-with-your-address) doesn't survive contact with the Zcash wallet landscape. Most wallets don't implement `signmessage`, and asking shielded users to authenticate via legacy transparent t-addrs is the wrong direction. **Memo-challenge is the primary flow**: it works with every wallet that sends shielded payments (i.e. all of them) and uses Zcash's actual privacy strengths. The idea came from buying a Zcash name on [zcashnames](https://zcashnames.com): you send a tiny payment carrying a memo, and that payment is the proof. SIWZ packages that into plug-and-play sign-in. Drop in `<MemoSignIn />` plus two route handlers and you have working Zcash auth, no extra infrastructure to stand up.
 
 ## Install
 
