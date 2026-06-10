@@ -180,6 +180,39 @@ issueMemoHandler({
 });
 ```
 
+## JWT for non-NextAuth backends
+
+`pollMemoHandler` can optionally mint a signed JWT alongside the NextAuth envelope. Turn it on with the `jwt` option:
+
+```ts
+import { pollMemoHandler } from "@siwz/next-auth/memo";
+
+export const POST = pollMemoHandler({
+  secret: process.env.NEXTAUTH_SECRET!,
+  jwt: {
+    secret: process.env.JWT_SHARED_SECRET!,
+    issuer: "siwz-auth.example.com",
+    audience: "laravel-app.example.com",
+    ttlSeconds: 3600,
+  },
+});
+```
+
+The success response now includes a `jwt: "..."` field that any backend (Laravel, FastAPI, Express, Phoenix, raw Lambda) can verify with its language's standard JWT library. NextAuth consumers ignore the field; everyone else uses it.
+
+For non-NextAuth use the JWT helpers are re-exported from this package so a single install covers both flavours:
+
+```ts
+import { verifySiwzJwt } from "@siwz/next-auth";
+
+const claims = await verifySiwzJwt(token, {
+  secret: process.env.JWT_SHARED_SECRET!,
+  audience: "my-app.example.com",
+});
+```
+
+See [`@siwz/core`](https://www.npmjs.com/package/@siwz/core) for the underlying `issueSiwzJwt` / `verifySiwzJwt` primitives, claim reference, and security notes.
+
 ## Why stateless nonces
 
 A naive nonce implementation stores `nonce -> expiry` in memory or a database. That works but adds a stateful component to an otherwise stateless flow.
@@ -219,10 +252,15 @@ issueNonce({ secret, ttlSeconds? })            // -> { nonce, token, expiresAt }
 verifyNonceToken(token, { secret })            // -> { ok: true, nonce } | { ok: false, error }
 defaultMemoEnvelope(identity, secret)          // hex HMAC, the default envelope shape
 
+// JWT export (re-exported from @siwz/core for single-install non-NextAuth backends)
+issueSiwzJwt, verifySiwzJwt
+type SiwzJwtClaims, IssueSiwzJwtOpts, VerifySiwzJwtOpts
+
 // Types
 type SiwzProviderOptions, SiwzMemoProviderOptions
 type SiwzCredentials, SiwzUser
 type NonceTokenOptions, IssuedNonce, VerifyNonceResult
+type JwtIssueConfig
 ```
 
 ```ts
