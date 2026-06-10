@@ -1,4 +1,4 @@
-/** @siwz/core: Sign in with Zcash core protocol. */
+/** @siwz/core — Sign in with Zcash core protocol. */
 
 export { SiwzMessage, generateNonce } from "./message.js";
 export {
@@ -56,3 +56,5 @@ export type {
 export { ZCASH_BLOCKS, type ZcashBlockName } from "./zcash-blocks.js";
 // Types re-exported at root; runtime BlockchairExplorer stays at @siwz/core/explorers.
 export type { MemoExplorer, RecentOutput, RecentMemo } from "./explorers.js";
+export { issueSiwzJwt, verifySiwzJwt } from "./jwt.js";
+export type { SiwzJwtClaims, IssueSiwzJwtOpts, VerifySiwzJwtOpts } from "./jwt.js";

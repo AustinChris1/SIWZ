@@ -27,17 +27,85 @@ import { MemoSignIn } from "@siwz/react"; // full wiring in apps/zecwall
 ```
 
 On the server, three endpoints:
-- `POST /api/auth/memo/issue` → returns ZIP 321 URI + signed token
-- `POST /api/auth/memo/poll` → looks up the txid via your block-explorer client
+- `POST /api/auth/memo/issue` -- returns ZIP 321 URI + signed token
+- `POST /api/auth/memo/poll` -- looks up the txid via your block-explorer client
 - NextAuth credentials provider that consumes the verify envelope
+
+## Using SIWZ outside Next.js
+
+If your backend isn't Next.js you don't need NextAuth. SIWZ can mint a standard HS256 JWT after a successful sign-in, and any backend in any language that can verify a JWT can consume SIWZ as auth. The user's spending key never leaves their wallet.
+
+Run a small Node endpoint that handles the memo-challenge flow and emits a JWT. Your Laravel, Rails, FastAPI, Phoenix, or raw Lambda backend verifies that JWT and issues its own session. The Node endpoint can live on Vercel, Cloudflare Workers, or any Node host.
+
+The verify route turns on the `jwt` option:
+
+```ts
+// /api/auth/memo/poll
+import { pollMemoHandler } from "@siwz/next-auth/memo";
+
+export const POST = pollMemoHandler({
+  secret: process.env.SIWZ_SECRET!,
+  jwt: {
+    secret: process.env.JWT_SHARED_SECRET!,
+    issuer: "siwz-auth.example.com",
+    audience: "laravel-app.example.com",
+    ttlSeconds: 3600,
+  },
+});
+```
+
+Successful response now includes a `jwt` field:
+
+```json
+{
+  "ok": true,
+  "identity": "t1abc...xyz",
+  "jwt": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### Verifying on the consumer
+
+**Laravel (PHP, via `firebase/php-jwt`):**
+
+```php
+$claims = JWT::decode($request->bearerToken(), new Key(env('JWT_SHARED_SECRET'), 'HS256'));
+// $claims->sub is the Zcash address
+```
+
+**Express (Node, no NextAuth):**
+
+```ts
+import { verifySiwzJwt } from "@siwz/next-auth";
+
+const claims = await verifySiwzJwt(token, {
+  secret: process.env.JWT_SHARED_SECRET!,
+  issuer: "siwz-auth.example.com",
+  audience: "express-app.example.com",
+});
+// claims.sub is the Zcash address
+```
+
+**FastAPI (Python, via `python-jose`):**
+
+```python
+from jose import jwt
+
+claims = jwt.decode(token, JWT_SECRET, algorithms=["HS256"],
+                    audience="fastapi-app.example.com",
+                    issuer="siwz-auth.example.com")
+# claims["sub"] is the Zcash address
+```
+
+JWT claims include `sub` (Zcash address), `iat`, `exp`, `jti`, plus optional `iss`, `aud`, `flow` (`"memo"` / `"signmessage"` / `"snap"`), and `network`. Set `JWT_SHARED_SECRET` to at least 16 chars; generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Keep it distinct from `NEXTAUTH_SECRET` (different trust boundaries).
 
 ## What's in this repo
 
 | Package | What it is |
 |---|---|
-| [`@siwz/core`](./packages/siwz-core) | Protocol primitives: message format, address parsing, signature verification. Zero React/Next deps. |
+| [`@siwz/core`](./packages/siwz-core) | Protocol primitives: message format, address parsing, signature verification, JWT issue/verify. Zero React/Next deps. |
 | [`@siwz/react`](./packages/siwz-react) | The `<SignInWithZcash />` React component and `useSiwz()` hook. Optional MetaMask + Zcash-Snap one-click flow with graceful fallback to paste. |
-| [`@siwz/next-auth`](./packages/siwz-next-auth) | NextAuth.js v4 / Auth.js v5 credentials provider. Includes stateless signed-nonce helpers. |
+| [`@siwz/next-auth`](./packages/siwz-next-auth) | NextAuth.js v4 / Auth.js v5 credentials provider. Includes stateless signed-nonce helpers and the `verifySiwzJwt` export for framework-agnostic JWT verification. |
 | [`apps/zecwall`](./apps/zecwall) | ZecWall: minimal Zcash-gated comments wall consuming the packages end to end. The shortest possible SIWZ integration. |
 | [`apps/site`](./apps/site) | The siwz.vercel.app landing page. |
 | [`apps/lightwallet-rpc`](./apps/lightwallet-rpc) | `zingo-cli`-backed HTTPS wrapper for shielded sign-in. Ships as a multi-arch Docker image to GHCR. |
@@ -65,18 +133,19 @@ Need a service address? `node scripts/gen-service-address.mjs` writes a fresh t-
 2. **Client builds a SIWZ message** containing the domain, address, nonce, issued-at, optional expiry, and a human-readable statement. The format mirrors EIP-4361 (with `Network:` replacing `Chain ID:` since Zcash has no chain id).
 3. **User signs in their wallet.** For a t-addr, that's `zcash-cli signmessage "<address>" "<message>"` or the equivalent in Zodl / Zingo / YWallet. For shielded addresses, [ZIP 304](https://zips.z.cash/zip-0304) signing or the memo-challenge fallback.
 4. **Client posts `{message, signature, nonceToken}`** to NextAuth's credentials endpoint.
-5. **Server verifies** via `@siwz/core`'s `verifyMessage`: parses the message, checks the nonce HMAC, checks domain & time window, then recovers the secp256k1 public key and re-derives the t-addr's HASH160. Match ⇒ authenticated.
+5. **Server verifies** via `@siwz/core`'s `verifyMessage`: parses the message, checks the nonce HMAC, checks domain & time window, then recovers the secp256k1 public key and re-derives the t-addr's HASH160. Match => authenticated.
 
 Cryptographic detail: SIWZ uses the same wire format zcashd's `signmessage` RPC uses, with magic prefix `"Zcash Signed Message:\n"`. That means any wallet that implements Zcash signmessage out of the box also produces SIWZ-compatible signatures.
 
 ## Status & roadmap
 
 **Working today:**
-- **Memo-challenge sign-in** (primary flow): `<MemoSignIn />` + drop-in `issueMemoHandler` / `pollMemoHandler` + `SiwzMemoProvider`. Free transparent explorer chain (3xpl + Blockchair fallback) by default; bring-your-own shielded explorer for `zs…` / `u1…` service addresses.
-- Transparent (`t1…`, `tm…`) signed-message via `<SignInWithZcash />` + `SiwzProvider`.
+- **Memo-challenge sign-in** (primary flow): `<MemoSignIn />` + drop-in `issueMemoHandler` / `pollMemoHandler` + `SiwzMemoProvider`. Free transparent explorer chain (3xpl + Blockchair fallback) by default; bring-your-own shielded explorer for `zs...` / `u1...` service addresses.
+- Transparent (`t1...`, `tm...`) signed-message via `<SignInWithZcash />` + `SiwzProvider`.
 - MetaMask + Zcash-Snap permission-based auth (architectural integration ready; gated by ChainSafe's allowlist upstream).
+- JWT export for non-NextAuth backends (Express, Laravel, FastAPI, Phoenix, raw Lambda) via `pollMemoHandler({ jwt: { ... } })` or the standalone `issueSiwzJwt` / `verifySiwzJwt` helpers.
 - Matching `<SignOut />` component with idle / busy / confirm states.
-- 59 unit tests covering ZIP 321 round-trip, memo-challenge HMAC, message format, address parsing, signature verify.
+- 76 unit tests covering ZIP 321 round-trip, memo-challenge HMAC, message format, address parsing, signature verify, and JWT issuance/verification.
 - Shielded memo decryption via [`apps/lightwallet-rpc`](./apps/lightwallet-rpc): a `zingo-cli`-backed HTTPS wrapper that ships as a multi-arch Docker image with GHCR auto-publish.
 
 **Where Zcash is going and where SIWZ goes with it:**

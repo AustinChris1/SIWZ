@@ -1,7 +1,7 @@
 {
   "name": "@siwz/next-auth",
-  "version": "0.2.2",
-  "description": "Sign in with Zcash: NextAuth.js v4 / Auth.js v5 credentials provider",
+  "version": "0.2.3",
+  "description": "Sign in with Zcash — NextAuth.js v4 / Auth.js v5 credentials provider",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

@@ -173,3 +173,7 @@ function defaultVerifyEnvelope(identity: string, envelope: string, secret: strin
 export { issueNonce, verifyNonceToken } from "./nonce.js";
 export type { NonceTokenOptions, IssuedNonce, VerifyNonceResult } from "./nonce.js";
 export { defaultMemoEnvelope } from "./memo.js";
+export type { JwtIssueConfig } from "./memo.js";
+// Re-export JWT helpers so non-NextAuth backends only need this one package.
+export { issueSiwzJwt, verifySiwzJwt } from "@siwz/core";
+export type { SiwzJwtClaims, IssueSiwzJwtOpts, VerifySiwzJwtOpts } from "@siwz/core";

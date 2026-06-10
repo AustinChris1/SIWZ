@@ -4,6 +4,7 @@
 import { createHmac } from "node:crypto";
 import {
   issueMemoChallenge,
+  issueSiwzJwt,
   parseAddress,
   verifyMemoChallenge,
   type MemoChallengeMode,
@@ -12,6 +13,7 @@ import {
   type Network,
   type RecentMemo,
   type RecentOutput,
+  type SiwzJwtClaims,
 } from "@siwz/core";
 import {
   BlockchairExplorer,
@@ -126,6 +128,21 @@ export function issueMemoHandler(
   };
 }
 
+export interface JwtIssueConfig {
+  /** Override the JWT signing secret. Defaults to PollMemoHandlerOptions.secret. */
+  secret?: string;
+  /** Seconds until the issued JWT expires. Default 3600 (1h). */
+  ttlSeconds?: number;
+  /** Issuer claim. Recommended for multi-app deployments. */
+  issuer?: string;
+  /** Audience claim. The backend(s) that will verify the JWT. */
+  audience?: string | string[];
+  /** Network the address belongs to. Default "mainnet". */
+  network?: "mainnet" | "testnet" | "regtest";
+  /** Extra claims to merge into the issued token. */
+  extraClaims?: (identity: string) => Record<string, unknown>;
+}
+
 export interface PollMemoHandlerOptions {
   secret: string;
   /** Transparent observations. Default: free MultiExplorer (3xpl + Blockchair). */
@@ -136,6 +153,10 @@ export interface PollMemoHandlerOptions {
   scanLimit?: number;
   /** Override the envelope shape. Return `null` to omit. Default: defaultMemoEnvelope. */
   buildEnvelope?: (identity: string, secret: string) => string | null;
+  /** When set, response also includes a signed JWT for non-NextAuth backends
+   *  (Express, FastAPI via verification, Laravel via verification, etc).
+   *  Pass `true` for defaults or an object for per-claim control. */
+  jwt?: boolean | JwtIssueConfig;
 }
 
 /** App Router POST handler for memo-challenge polling.
@@ -151,6 +172,27 @@ export function pollMemoHandler(
   }
   const scanLimit = opts.scanLimit ?? 50;
   const transparentExplorer = opts.explorer ?? defaultTransparentExplorer();
+  const jwtCfg = opts.jwt === true ? {} : opts.jwt || null;
+
+  async function maybeIssueJwt(
+    identity: string,
+    flow: "memo",
+  ): Promise<string | null> {
+    if (!jwtCfg) return null;
+    const claims: SiwzJwtClaims = {
+      sub: identity,
+      flow,
+      network: jwtCfg.network ?? "mainnet",
+      ...(jwtCfg.issuer ? { iss: jwtCfg.issuer } : {}),
+      ...(jwtCfg.audience ? { aud: jwtCfg.audience } : {}),
+      ...(jwtCfg.extraClaims ? jwtCfg.extraClaims(identity) : {}),
+    };
+    return issueSiwzJwt(claims, {
+      secret: jwtCfg.secret ?? opts.secret,
+      ttlSeconds: jwtCfg.ttlSeconds,
+    });
+  }
+
   return async (req: Request): Promise<Response> => {
     let body: { token?: unknown };
     try {
@@ -199,11 +241,13 @@ export function pollMemoHandler(
             result.identity,
             opts.secret,
           );
+          const jwt = await maybeIssueJwt(result.identity, "memo");
           return Response.json({
             ok: true,
             mode,
             identity: result.identity,
             ...(envelope !== null ? { envelope } : {}),
+            ...(jwt ? { jwt } : {}),
             txid: output.txid,
           });
         }
@@ -235,11 +279,13 @@ export function pollMemoHandler(
           result.identity,
           opts.secret,
         );
+        const jwt = await maybeIssueJwt(result.identity, "memo");
         return Response.json({
           ok: true,
           mode,
           identity: result.identity,
           ...(envelope !== null ? { envelope } : {}),
+          ...(jwt ? { jwt } : {}),
           txid: m.txid,
         });
       }
